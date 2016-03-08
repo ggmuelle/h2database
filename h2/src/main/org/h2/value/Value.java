@@ -18,7 +18,12 @@ import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.Iterator;
+import java.util.ServiceLoader;
+
 import org.h2.api.ErrorCode;
+import org.h2.api.SpatialDriver;
+import org.h2.api.ValueGeometryFactory;
 import org.h2.engine.Constants;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
@@ -184,6 +189,18 @@ public abstract class Value {
             BigDecimal.valueOf(Long.MAX_VALUE);
     private static final BigDecimal MIN_LONG_DECIMAL =
             BigDecimal.valueOf(Long.MIN_VALUE);
+    
+    /**
+     * Factory which provides a couple of methods to create a {@link IGeometry}
+     * instance.
+     */
+    private static final ValueGeometryFactory<? extends ValueGeometry<?>,?> GEOMETRY_FACTORY;
+
+    static {
+		ServiceLoader<SpatialDriver> geometryFactories = ServiceLoader.load(SpatialDriver.class);
+		Iterator<SpatialDriver> geometryFactoryIterator = geometryFactories.iterator();
+        GEOMETRY_FACTORY = (geometryFactoryIterator.hasNext() ? geometryFactories.iterator().next().createGeometryFactory() : null);
+    }
 
     /**
      * Get the SQL expression for this value.
@@ -898,11 +915,11 @@ public abstract class Value {
             case GEOMETRY: {
                 switch (getType()) {
                 case BYTES:
-                    return ValueGeometry.get(getBytesNoCopy());
+                    return GEOMETRY_FACTORY.get(getBytesNoCopy());
                 case JAVA_OBJECT:
                     Object object = JdbcUtils.deserialize(getBytesNoCopy(), getDataHandler());
-                    if (DataType.isGeometry(object)) {
-                        return ValueGeometry.getFromGeometry(object);
+                    if (GEOMETRY_FACTORY.isGeometryTypeSupported(object)) {
+                        return GEOMETRY_FACTORY.getFromGeometry(object);
                     }
                 case TIMESTAMP_TZ:
                     throw DbException.get(
@@ -985,7 +1002,7 @@ public abstract class Value {
             case UUID:
                 return ValueUuid.get(s);
             case GEOMETRY:
-                return ValueGeometry.get(s);
+                return GEOMETRY_FACTORY.get(s);
             default:
                 if (JdbcUtils.customDataTypesHandler != null) {
                     return JdbcUtils.customDataTypesHandler.convert(this, targetType);
@@ -1254,5 +1271,18 @@ public abstract class Value {
     public interface ValueBlob {
         // this is a marker interface
     }
-
+    
+    /**
+     * Returns <code>true</code> if a IGeometryFactory is available and initialized.
+     * @return
+     */
+    public static boolean isGeometryFactoryInitialized()
+    {
+    	return GEOMETRY_FACTORY!=null;
+    }
+    
+    public static ValueGeometryFactory<? extends ValueGeometry<?>, ?> getGeometryFactory()
+    {
+    	return GEOMETRY_FACTORY;
+    }
 }

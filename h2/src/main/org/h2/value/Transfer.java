@@ -716,9 +716,9 @@ public class Transfer {
         }
         case Value.GEOMETRY:
             if (version >= Constants.TCP_PROTOCOL_VERSION_14) {
-                return ValueGeometry.get(readBytes());
+                return Value.getGeometryFactory().get(readBytes());
             }
-            return ValueGeometry.get(readString());
+            return Value.getGeometryFactory().get(readString());
         default:
             if (JdbcUtils.customDataTypesHandler != null) {
                 return JdbcUtils.customDataTypesHandler.convert(

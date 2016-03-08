@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Random;
+
 import org.h2.api.JavaObjectSerializer;
 import org.h2.engine.Constants;
 import org.h2.store.DataHandler;
@@ -24,7 +25,6 @@ import org.h2.util.SmallLRUCache;
 import org.h2.util.TempFileDeleter;
 import org.h2.util.Utils;
 import org.h2.value.CompareMode;
-import org.h2.value.DataType;
 import org.h2.value.Value;
 import org.h2.value.ValueArray;
 import org.h2.value.ValueBoolean;
@@ -34,7 +34,6 @@ import org.h2.value.ValueDate;
 import org.h2.value.ValueDecimal;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueFloat;
-import org.h2.value.ValueGeometry;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueJavaObject;
 import org.h2.value.ValueLong;
@@ -214,10 +213,10 @@ public class TestValueMemory extends TestBase implements DataHandler {
         case Value.STRING_FIXED:
             return ValueStringFixed.get(randomString(random.nextInt(100)));
         case Value.GEOMETRY:
-            if (DataType.GEOMETRY_CLASS == null) {
+        	if(!Value.isGeometryFactoryInitialized()){
                 return ValueNull.INSTANCE;
             }
-            return ValueGeometry.get("POINT (" + random.nextInt(100) + " " +
+            return Value.getGeometryFactory().get("POINT (" + random.nextInt(100) + " " +
                     random.nextInt(100) + ")");
         default:
             throw new AssertionError("type=" + type);

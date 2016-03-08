@@ -17,6 +17,7 @@ import org.h2.test.TestBase;
 import org.h2.tools.SimpleResultSet;
 import org.h2.tools.SimpleRowSource;
 import org.h2.value.DataType;
+import org.h2.value.JTSValueGeometryFactory;
 import org.h2.value.Value;
 import org.h2.value.ValueGeometry;
 import com.vividsolutions.jts.geom.Coordinate;
@@ -38,7 +39,7 @@ import com.vividsolutions.jts.io.WKTReader;
  */
 public class TestSpatial extends TestBase {
 
-    private static final String URL = "spatial";
+    private String URL = "spatial";
 
     /**
      * Run just this test.
@@ -57,15 +58,15 @@ public class TestSpatial extends TestBase {
         if (config.memory && config.mvcc) {
             return;
         }
-        if (DataType.GEOMETRY_CLASS != null) {
+        if (Value.isGeometryFactoryInitialized()) {
             deleteDb("spatial");
+            url = "spatial";
             testSpatial();
             deleteDb("spatial");
         }
     }
 
     private void testSpatial() throws SQLException {
-        testBug1();
         testSpatialValues();
         testOverlap();
         testNotOverlap();
@@ -97,27 +98,12 @@ public class TestSpatial extends TestBase {
         testSpatialIndexWithOrder();
     }
 
-    private void testBug1() throws SQLException {
-        deleteDb("spatial");
-        Connection conn = getConnection(URL);
-        Statement stat = conn.createStatement();
-
-        stat.execute("CREATE TABLE VECTORS (ID INTEGER NOT NULL, GEOM GEOMETRY, S INTEGER)");
-        stat.execute("INSERT INTO VECTORS(ID, GEOM, S) " +
-                "VALUES(0, 'POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))', 1)");
-
-        stat.executeQuery("select * from (select * from VECTORS) WHERE S=1 " +
-                "AND GEOM && 'POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))'");
-        conn.close();
-        deleteDb("spatial");
-    }
-
     private void testHashCode() {
-        ValueGeometry geomA = ValueGeometry
+        ValueGeometry<?> geomA = Value.getGeometryFactory()
                 .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))");
-        ValueGeometry geomB = ValueGeometry
+        ValueGeometry<?> geomB = Value.getGeometryFactory()
                 .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))");
-        ValueGeometry geomC = ValueGeometry
+        ValueGeometry<?> geomC = Value.getGeometryFactory()
                 .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 5,  67 13 6))");
         assertEquals(geomA.hashCode(), geomB.hashCode());
         assertFalse(geomA.hashCode() == geomC.hashCode());
@@ -595,15 +581,16 @@ public class TestSpatial extends TestBase {
      * Test serialization of Z and SRID values.
      */
     private void testWKB() {
-        ValueGeometry geom3d = ValueGeometry.get(
-                "POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))", 27572);
-        ValueGeometry copy = ValueGeometry.get(geom3d.getBytes());
-        assertEquals(6, copy.getGeometry().getCoordinates()[0].z);
-        assertEquals(5, copy.getGeometry().getCoordinates()[1].z);
-        assertEquals(4, copy.getGeometry().getCoordinates()[2].z);
-        // Test SRID
-        copy = ValueGeometry.get(geom3d.getBytes());
-        assertEquals(27572, copy.getGeometry().getSRID());
+    	JTSValueGeometryFactory geometryFactory = new JTSValueGeometryFactory();
+		ValueGeometry<Geometry> geom3d = geometryFactory.get(
+				"POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))", 27572);
+		ValueGeometry<Geometry> copy = geometryFactory.get(geom3d.getBytes());
+		assertEquals(6, copy.getGeometry().getCoordinates()[0].z);
+		assertEquals(5, copy.getGeometry().getCoordinates()[1].z);
+		assertEquals(4, copy.getGeometry().getCoordinates()[2].z);
+		// Test SRID
+		copy = geometryFactory.get(geom3d.getBytes());
+		assertEquals(27572, copy.getGeometry().getSRID());
     }
 
     /**
@@ -639,25 +626,25 @@ public class TestSpatial extends TestBase {
      */
     private void testEquals() {
         // 3d equality test
-        ValueGeometry geom3d = ValueGeometry.get(
+        ValueGeometry<?> geom3d = Value.getGeometryFactory().get(
                 "POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))");
-        ValueGeometry geom2d = ValueGeometry.get(
+        ValueGeometry<?> geom2d = Value.getGeometryFactory().get(
                 "POLYGON ((67 13, 67 18, 59 18, 59 13,  67 13))");
         assertFalse(geom3d.equals(geom2d));
         // SRID equality test
         GeometryFactory geometryFactory = new GeometryFactory();
         Geometry geometry = geometryFactory.createPoint(new Coordinate(0, 0));
         geometry.setSRID(27572);
-        ValueGeometry valueGeometry =
-                ValueGeometry.getFromGeometry(geometry);
+        ValueGeometry<?> valueGeometry =
+        		Value.getGeometryFactory().get(geometry);
         Geometry geometry2 = geometryFactory.createPoint(new Coordinate(0, 0));
         geometry2.setSRID(5326);
-        ValueGeometry valueGeometry2 =
-                ValueGeometry.getFromGeometry(geometry2);
+        ValueGeometry<?> valueGeometry2 =
+        		Value.getGeometryFactory().get(geometry2);
         assertFalse(valueGeometry.equals(valueGeometry2));
         // Check illegal geometry (no WKB representation)
         try {
-            ValueGeometry.get("POINT EMPTY");
+        	Value.getGeometryFactory().get("POINT EMPTY");
             fail("expected this to throw IllegalArgumentException");
         } catch (IllegalArgumentException ex) {
             // expected
@@ -793,13 +780,13 @@ public class TestSpatial extends TestBase {
      * Check ValueGeometry conversion into SQL script
      */
     private void testValueGeometryScript() throws SQLException {
-        ValueGeometry valueGeometry = ValueGeometry.get("POINT(1 1 5)");
+        ValueGeometry<?> valueGeometry = Value.getGeometryFactory().get("POINT(1 1 5)");
         try (Connection conn = getConnection(URL)) {
             ResultSet rs = conn.createStatement().executeQuery(
                     "SELECT " + valueGeometry.getSQL());
             assertTrue(rs.next());
             Object obj = rs.getObject(1);
-            ValueGeometry g = ValueGeometry.getFromGeometry(obj);
+            ValueGeometry<?> g = Value.getGeometryFactory().get(obj);
             assertTrue("got: " + g + " exp: " + valueGeometry, valueGeometry.equals(g));
         }
     }
