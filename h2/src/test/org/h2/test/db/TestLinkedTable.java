@@ -17,7 +17,7 @@ import java.sql.Timestamp;
 import org.h2.api.ErrorCode;
 import org.h2.store.fs.FileUtils;
 import org.h2.test.TestBase;
-import org.h2.value.DataType;
+import org.h2.value.ValueGeometry;
 
 /**
  * Tests the linked table feature (CREATE LINKED TABLE).
@@ -700,7 +700,7 @@ public class TestLinkedTable extends TestBase {
         if (config.memory && config.mvcc) {
             return;
         }
-        if (DataType.GEOMETRY_CLASS == null) {
+        if (!ValueGeometry.isGeometryFactoryInitialized()) {
             return;
         }
         org.h2.Driver.load();
