@@ -662,11 +662,11 @@ public class TestSpatial extends TestBase {
         Geometry geometry = geometryFactory.createPoint(new Coordinate(0, 0));
         geometry.setSRID(27572);
         ValueGeometry<?> valueGeometry =
-        		Value.getGeometryFactory().get(geometry);
+        		Value.getGeometryFactory().getFromGeometry(geometry);
         Geometry geometry2 = geometryFactory.createPoint(new Coordinate(0, 0));
         geometry2.setSRID(5326);
         ValueGeometry<?> valueGeometry2 =
-        		Value.getGeometryFactory().get(geometry2);
+        		Value.getGeometryFactory().getFromGeometry(geometry2);
         assertFalse(valueGeometry.equals(valueGeometry2));
         // Check illegal geometry (no WKB representation)
         try {
@@ -823,7 +823,7 @@ public class TestSpatial extends TestBase {
                     "SELECT " + valueGeometry.getSQL());
             assertTrue(rs.next());
             Object obj = rs.getObject(1);
-            ValueGeometry<?> g = Value.getGeometryFactory().get(obj);
+            ValueGeometry<?> g = Value.getGeometryFactory().getFromGeometry(obj);
             assertTrue("got: " + g + " exp: " + valueGeometry, valueGeometry.equals(g));
         } finally {
             conn.close();
