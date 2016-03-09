@@ -13,6 +13,7 @@ import com.vividsolutions.jts.geom.CoordinateSequenceFilter;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.PrecisionModel;
+import com.vividsolutions.jts.io.ParseException;
 import com.vividsolutions.jts.io.WKBReader;
 import com.vividsolutions.jts.io.WKBWriter;
 import com.vividsolutions.jts.io.WKTReader;
@@ -29,7 +30,7 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 	public Geometry getGeometry(byte[] bytes) throws DbException {
 		try {
 			return  new WKBReader().read(bytes);
-		} catch (Throwable ex) {
+		} catch (ParseException ex) {
             throw DbException.convert(ex);
         }
 	}
@@ -39,7 +40,7 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 	{
 		try {
             return new WKTReader().read(s);
-        } catch (Throwable ex) {
+        } catch (ParseException ex) {
             throw DbException.convert(ex);
         }
 	}
@@ -49,7 +50,7 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 		try {
 			GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), srid);
 			return new WKTReader(geometryFactory).read(s);
-		}catch(Throwable ex)
+		}catch(ParseException ex)
 		{
 			throw DbException.convert(ex);
 		}
@@ -67,7 +68,7 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
         try {
             Geometry g = new WKTReader().read(s);
             return get(g);
-        } catch (Throwable ex) {
+        } catch (ParseException ex) {
             throw DbException.convert(ex);
         }
     }
@@ -78,7 +79,7 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
             GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), srid);
             Geometry g = new WKTReader(geometryFactory).read(s);
             return get(g);
-        } catch (Throwable ex) {
+        } catch (ParseException ex) {
             throw DbException.convert(ex);
         }
     }
