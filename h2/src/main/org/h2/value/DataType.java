@@ -22,6 +22,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.TimestampWithTimeZone;
 import org.h2.engine.Constants;
@@ -48,15 +49,6 @@ public class DataType {
      * ResultSet (OracleTypes.CURSOR = -10).
      */
     public static final int TYPE_RESULT_SET = -10;
-
-    /**
-     * The Geometry class. This object is null if the jts jar file is not in the
-     * classpath.
-     */
-    public static final Class<?> GEOMETRY_CLASS;
-
-    private static final String GEOMETRY_CLASS_NAME =
-            "com.vividsolutions.jts.geom.Geometry";
 
     /**
      * The list of types. An ArrayList so that Tomcat doesn't set it to null
@@ -171,17 +163,6 @@ public class DataType {
      * The number of bytes required for an object.
      */
     public int memory;
-
-    static {
-        Class<?> g;
-        try {
-            g = JdbcUtils.loadUserClass(GEOMETRY_CLASS_NAME);
-        } catch (Exception e) {
-            // class is not in the classpath - ignore
-            g = null;
-        }
-        GEOMETRY_CLASS = g;
-    }
 
     static {
         for (int i = 0; i < Value.TYPE_COUNT; i++) {
@@ -690,10 +671,11 @@ public class DataType {
             }
             case Value.GEOMETRY: {
                 Object x = rs.getObject(columnIndex);
-                if (x == null) {
+                if (x == null || !Value.getGeometryFactory().isGeometryTypeSupported(x)) {
                     return ValueNull.INSTANCE;
                 }
-                return ValueGeometry.getFromGeometry(x);
+
+                return Value.getGeometryFactory().getFromGeometry(x);
             }
             default:
                 throw DbException.throwInternalError("type="+type);
@@ -777,7 +759,7 @@ public class DataType {
         case Value.RESULT_SET:
             return ResultSet.class.getName();
         case Value.GEOMETRY:
-            return GEOMETRY_CLASS_NAME;
+            return Value.getGeometryFactory().getGeometryType().getName();
         default:
             throw DbException.throwInternalError("type="+type);
         }
@@ -975,7 +957,7 @@ public class DataType {
         } else if (Object[].class.isAssignableFrom(x)) {
             // this includes String[] and so on
             return Value.ARRAY;
-        } else if (isGeometryClass(x)) {
+        } else if (Value.getGeometryFactory().getGeometryType().isAssignableFrom(x)) {
             return Value.GEOMETRY;
         } else {
             return Value.JAVA_OBJECT;
@@ -1080,37 +1062,11 @@ public class DataType {
             return ValueArray.get(x.getClass().getComponentType(), v);
         } else if (x instanceof Character) {
             return ValueStringFixed.get(((Character) x).toString());
-        } else if (isGeometry(x)) {
-            return ValueGeometry.getFromGeometry(x);
+        } else if (Value.getGeometryFactory().isGeometryTypeSupported(x)) {
+            return Value.getGeometryFactory().getFromGeometry(x);
         } else {
             return ValueJavaObject.getNoCopy(x, null, session.getDataHandler());
         }
-    }
-
-    /**
-     * Check whether a given class matches the Geometry class.
-     *
-     * @param x the class
-     * @return true if it is a Geometry class
-     */
-    public static boolean isGeometryClass(Class<?> x) {
-        if (x == null || GEOMETRY_CLASS == null) {
-            return false;
-        }
-        return GEOMETRY_CLASS.isAssignableFrom(x);
-    }
-
-    /**
-     * Check whether a given object is a Geometry object.
-     *
-     * @param x the the object
-     * @return true if it is a Geometry object
-     */
-    public static boolean isGeometry(Object x) {
-        if (x == null) {
-            return false;
-        }
-        return isGeometryClass(x.getClass());
     }
 
     /**

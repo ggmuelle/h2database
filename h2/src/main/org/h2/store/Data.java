@@ -35,7 +35,6 @@ import org.h2.value.ValueDate;
 import org.h2.value.ValueDecimal;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueFloat;
-import org.h2.value.ValueGeometry;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueJavaObject;
 import org.h2.value.ValueLob;
@@ -805,7 +804,7 @@ public class Data {
             int len = readVarInt();
             byte[] b = DataUtils.newBytes(len);
             read(b, 0, len);
-            return ValueGeometry.get(b);
+            return Value.getGeometryFactory().get(b);
         }
         case Value.JAVA_OBJECT: {
             int len = readVarInt();
