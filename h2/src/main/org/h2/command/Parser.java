@@ -220,6 +220,7 @@ public class Parser {
     private boolean recompileAlways;
     private ArrayList<Parameter> indexedParameterList;
     private int orderInFrom;
+    private ArrayList<Parameter> suppliedParameterList;
 
     public Parser(Session session) {
         this.database = session.getDatabase();
@@ -311,7 +312,7 @@ public class Parser {
         currentPrepared = null;
         createView = null;
         recompileAlways = false;
-        indexedParameterList = null;
+        indexedParameterList = suppliedParameterList;
         read();
         return parsePrepared();
     }
@@ -2764,6 +2765,9 @@ public class Parser {
             if (isToken("SELECT") || isToken("FROM")) {
                 Query query = parseSelect();
                 r = new Subquery(query);
+            } else if (readIf("WITH")) {
+                Query query = parseWith();
+                r = new Subquery(query);
             } else {
                 throw getSyntaxError();
             }
@@ -4745,6 +4749,7 @@ public class Parser {
         recursiveTable = schema.createTable(data);
         session.addLocalTempTable(recursiveTable);
         String querySQL;
+        Column[] columnTemplates = new Column[cols.length];
         try {
             read("AS");
             read("(");
@@ -4752,12 +4757,16 @@ public class Parser {
             read(")");
             withQuery.prepare();
             querySQL = StringUtils.fromCacheOrNew(withQuery.getPlanSQL());
+            ArrayList<Expression> withExpressions = withQuery.getExpressions();
+            for (int i = 0; i < cols.length; ++i) {
+                columnTemplates[i] = new Column(cols[i], withExpressions.get(i).getType());
+            }
         } finally {
             session.removeLocalTempTable(recursiveTable);
         }
         int id = database.allocateObjectId();
         TableView view = new TableView(schema, id, tempViewName, querySQL,
-                null, cols, session, true);
+                parameters, columnTemplates, session, true);
         view.setTableExpression(true);
         view.setTemporary(true);
         session.addLocalTempTable(view);
@@ -6097,6 +6106,10 @@ public class Parser {
 
     public void setRightsChecked(boolean rightsChecked) {
         this.rightsChecked = rightsChecked;
+    }
+
+    public void setSuppliedParameterList(ArrayList<Parameter> suppliedParameterList) {
+        this.suppliedParameterList = suppliedParameterList;
     }
 
     /**

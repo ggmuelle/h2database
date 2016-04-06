@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 import org.h2.api.ErrorCode;
+import org.h2.command.Parser;
 import org.h2.command.Prepared;
 import org.h2.command.dml.Query;
 import org.h2.command.dml.SelectUnion;
@@ -159,8 +160,8 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public Cursor findByGeometry(TableFilter filter, SearchRow intersection) {
-        return find(filter.getSession(), null, null, intersection);
+    public Cursor findByGeometry(TableFilter filter, SearchRow first, SearchRow last, SearchRow intersection) {
+        return find(filter.getSession(), first, last, intersection);
     }
 
     private static Query prepareSubQuery(String sql, Session session, int[] masks,
@@ -184,7 +185,10 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
             return new ViewCursor(this, recResult, first, last);
         }
         if (query == null) {
-            query = (Query) createSession.prepare(querySQL, true);
+            Parser parser = new Parser(createSession);
+            parser.setRightsChecked(true);
+            parser.setSuppliedParameterList(originalParameters);
+            query = (Query) parser.prepare(querySQL);
         }
         if (!query.isUnion()) {
             throw DbException.get(ErrorCode.SYNTAX_ERROR_2,
@@ -256,8 +260,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
         } else {
             len = 0;
         }
-        int idx = originalParameters == null ? 0 : originalParameters.size();
-        idx += view.getParameterOffset();
+        int idx = view.getParameterOffset(originalParameters);
         for (int i = 0; i < len; i++) {
             int mask = indexMasks[i];
             if ((mask & IndexCondition.EQUALITY) != 0) {
@@ -309,9 +312,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
         if (!q.allowGlobalConditions()) {
             return q;
         }
-        int firstIndexParam = originalParameters == null ?
-                0 : originalParameters.size();
-        firstIndexParam += view.getParameterOffset();
+        int firstIndexParam = view.getParameterOffset(originalParameters);
         IntArray paramIndex = new IntArray();
         int indexColumnCount = 0;
         for (int i = 0; i < masks.length; i++) {

@@ -41,7 +41,7 @@ import com.vividsolutions.jts.io.WKTReader;
  */
 public class TestSpatial extends TestBase {
 
-    private String url = "spatial";
+    private static final String url = "spatial";
 
     /**
      * Run just this test.
@@ -62,13 +62,13 @@ public class TestSpatial extends TestBase {
         }
         if (Value.isGeometryFactoryInitialized()) {
             deleteDb("spatial");
-            url = "spatial";
             testSpatial();
             deleteDb("spatial");
         }
     }
 
     private void testSpatial() throws SQLException {
+        testBug1();
         testSpatialValues();
         testOverlap();
         testNotOverlap();
@@ -95,6 +95,19 @@ public class TestSpatial extends TestBase {
         testNullableGeometryDelete();
         testNullableGeometryInsert();
         testNullableGeometryUpdate();
+    }
+    
+    private void testBug1() throws SQLException {
+        deleteDb("spatial");
+        Connection conn = getConnection(url);
+        Statement stat = conn.createStatement();
+
+        stat.execute("CREATE TABLE VECTORS (ID INTEGER NOT NULL, GEOM GEOMETRY, S INTEGER)");
+        stat.execute("INSERT INTO VECTORS(ID, GEOM, S) VALUES(0, 'POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))', 1)");
+
+        stat.executeQuery("select * from (select * from VECTORS) WHERE S=1 AND GEOM && 'POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))'");
+        conn.close();
+        deleteDb("spatial");
     }
 
     private void testHashCode() {
