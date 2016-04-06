@@ -384,7 +384,7 @@ public abstract class Value {
      * @param v the value to look for
      * @return the value in the cache or the value passed
      */
-    static Value cache(Value v) {
+    public static Value cache(Value v) {
         if (SysProperties.OBJECT_CACHE) {
             int hash = v.hashCode();
             if (softCache == null) {
