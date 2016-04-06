@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+
 import org.h2.api.ErrorCode;
 import org.h2.engine.Constants;
 import org.h2.engine.SysProperties;
@@ -361,7 +362,7 @@ public abstract class Value {
      * @param v the value to look for
      * @return the value in the cache or the value passed
      */
-    static Value cache(Value v) {
+    public static Value cache(Value v) {
         if (SysProperties.OBJECT_CACHE) {
             int hash = v.hashCode();
             if (softCache == null) {
