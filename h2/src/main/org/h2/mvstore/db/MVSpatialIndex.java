@@ -124,10 +124,10 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex {
         TransactionMap<SpatialKey, Value> map = getMap(session);
         SpatialKey key = getEnvelope(row);
 
-        if (key.isNull()) {
+        if (key == null || key.isNull()) {
             return;
         }
-
+        
         if (indexType.isUnique()) {
             // this will detect committed entries only
             RTreeCursor cursor = spatialMap.findContainedKeys(key);
@@ -170,14 +170,19 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex {
             return null;
         }
         Value v = row.getValue(columnIds[0]);
-        return ((ValueGeometry<?>) v.convertTo(Value.GEOMETRY)).getSpatialKey(row.getKey());
+        Object value = v.convertTo(Value.GEOMETRY);
+        if (value instanceof ValueGeometry) {
+        	return ((ValueGeometry<?>) value).getSpatialKey(row.getKey());
+        }
+        
+        return null;
     }
 
     @Override
     public void remove(Session session, Row row) {
         SpatialKey key = getEnvelope(row);
 
-        if (key.isNull()) {
+        if (key == null || key.isNull()) {
             return;
         }
 
@@ -212,10 +217,11 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex {
     }
 
     @Override
-    public Cursor findByGeometry(TableFilter filter, SearchRow intersection) {
+    public Cursor findByGeometry(TableFilter filter, SearchRow first,
+            SearchRow last, SearchRow intersection) {
         Session session = filter.getSession();
         if (intersection == null) {
-            return find(session);
+            return find(session, first, last);
         }
         Iterator<SpatialKey> cursor =
                 spatialMap.findIntersectingKeys(getEnvelope(intersection));

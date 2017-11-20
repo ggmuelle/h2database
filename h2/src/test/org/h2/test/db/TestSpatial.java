@@ -60,7 +60,7 @@ public class TestSpatial extends TestBase {
         }
         if (Value.isGeometryFactoryInitialized()) {
             deleteDb("spatial");
-            url = "spatial";
+            URL = "spatial";
             testSpatial();
             deleteDb("spatial");
         }

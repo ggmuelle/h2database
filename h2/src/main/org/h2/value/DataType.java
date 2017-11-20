@@ -168,9 +168,6 @@ public class DataType {
     public int memory;
 
     static {
-        for (int i = 0; i < Value.TYPE_COUNT; i++) {
-            TYPES_BY_VALUE_TYPE.add(null);
-        }
         add(Value.NULL, Types.NULL, "Null",
                 new DataType(),
                 new String[]{"NULL"},
@@ -1021,6 +1018,8 @@ public class DataType {
             return ValueLong.get(((Long) x).longValue());
         } else if (x instanceof Integer) {
             return ValueInt.get(((Integer) x).intValue());
+        } else if (x instanceof BigInteger) {
+        	return ValueDecimal.get(new BigDecimal((BigInteger) x));
         } else if (x instanceof BigDecimal) {
             return ValueDecimal.get((BigDecimal) x);
         } else if (x instanceof Boolean) {
@@ -1114,7 +1113,6 @@ public class DataType {
             return ValueJavaObject.getNoCopy(x, null, session.getDataHandler());
         }
     }
-
 
     /**
      * Get a data type object from a type name.
