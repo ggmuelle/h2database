@@ -9,9 +9,10 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+
 import org.h2.test.TestBase;
 import org.h2.test.TestDb;
-import org.h2.value.DataType;
+import org.h2.value.ValueGeometry;
 
 /**
  * Tests the "create index ... using" syntax.
@@ -115,7 +116,7 @@ public class TestUsingIndex extends TestDb {
         if (config.memory && config.mvStore) {
             return;
         }
-        if (DataType.GEOMETRY_CLASS == null) {
+        if (!ValueGeometry.isGeometryFactoryInitialized()) {
             return;
         }
         deleteDb("spatial");
@@ -148,7 +149,7 @@ public class TestUsingIndex extends TestDb {
         if (config.memory && config.mvStore) {
             return;
         }
-        if (DataType.GEOMETRY_CLASS == null) {
+        if (!ValueGeometry.isGeometryFactoryInitialized()) {
             return;
         }
         deleteDb("spatial");

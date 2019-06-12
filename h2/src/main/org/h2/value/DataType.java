@@ -9,7 +9,6 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
@@ -54,15 +53,6 @@ public class DataType {
      * ResultSet (OracleTypes.CURSOR = -10).
      */
     public static final int TYPE_RESULT_SET = -10;
-
-    /**
-     * The Geometry class. This object is null if the jts jar file is not in the
-     * classpath.
-     */
-    public static final Class<?> GEOMETRY_CLASS;
-
-    private static final String GEOMETRY_CLASS_NAME =
-            "org.locationtech.jts.geom.Geometry";
 
     /**
      * The list of types. An ArrayList so that Tomcat doesn't set it to null
@@ -167,15 +157,6 @@ public class DataType {
     public boolean hidden;
 
     static {
-        Class<?> g;
-        try {
-            g = JdbcUtils.loadUserClass(GEOMETRY_CLASS_NAME);
-        } catch (Exception e) {
-            // class is not in the classpath - ignore
-            g = null;
-        }
-        GEOMETRY_CLASS = g;
-
         DataType dataType = new DataType();
         dataType.defaultPrecision = dataType.maxPrecision = ValueNull.PRECISION;
         add(Value.NULL, Types.NULL,
@@ -744,10 +725,10 @@ public class DataType {
             }
             case Value.GEOMETRY: {
                 Object x = rs.getObject(columnIndex);
-                if (x == null) {
+                if (x == null || !Value.getGeometryFactory().isGeometryTypeSupported(x)) {
                     return ValueNull.INSTANCE;
                 }
-                return ValueGeometry.getFromGeometry(x);
+                return Value.getGeometryFactory().getFromGeometry(x);
             }
             case Value.INTERVAL_YEAR:
             case Value.INTERVAL_MONTH:
@@ -870,7 +851,7 @@ public class DataType {
         case Value.RESULT_SET:
             return ResultSet.class.getName();
         case Value.GEOMETRY:
-            return GEOMETRY_CLASS != null ? GEOMETRY_CLASS_NAME : String.class.getName();
+            return Value.getGeometryFactory().getGeometryType().getName();
         case Value.INTERVAL_YEAR:
         case Value.INTERVAL_MONTH:
         case Value.INTERVAL_DAY:
@@ -1102,7 +1083,7 @@ public class DataType {
         } else if (Object[].class.isAssignableFrom(x)) {
             // this includes String[] and so on
             return Value.ARRAY;
-        } else if (isGeometryClass(x)) {
+        } else if (Value.getGeometryFactory().getGeometryType().isAssignableFrom(x)) {
             return Value.GEOMETRY;
         } else if (LocalDateTimeUtils.LOCAL_DATE == x) {
             return Value.DATE;
@@ -1153,8 +1134,6 @@ public class DataType {
             return ValueLong.get((Long) x);
         } else if (x instanceof Integer) {
             return ValueInt.get((Integer) x);
-        } else if (x instanceof BigInteger) {
-            return ValueDecimal.get(new BigDecimal((BigInteger) x));
         } else if (x instanceof BigDecimal) {
             return ValueDecimal.get((BigDecimal) x);
         } else if (x instanceof Boolean) {
@@ -1235,8 +1214,8 @@ public class DataType {
             return ValueArray.get(clazz.getComponentType(), v);
         } else if (x instanceof Character) {
             return ValueStringFixed.get(((Character) x).toString());
-        } else if (isGeometry(x)) {
-            return ValueGeometry.getFromGeometry(x);
+        } else if (Value.getGeometryFactory().isGeometryTypeSupported(x)) {
+            return Value.getGeometryFactory().getFromGeometry(x);
         } else if (clazz == LocalDateTimeUtils.LOCAL_DATE) {
             return LocalDateTimeUtils.localDateToDateValue(x);
         } else if (clazz == LocalDateTimeUtils.LOCAL_TIME) {
@@ -1263,33 +1242,6 @@ public class DataType {
             }
             return ValueJavaObject.getNoCopy(x, null, session.getDataHandler());
         }
-    }
-
-
-    /**
-     * Check whether a given class matches the Geometry class.
-     *
-     * @param x the class
-     * @return true if it is a Geometry class
-     */
-    public static boolean isGeometryClass(Class<?> x) {
-        if (x == null || GEOMETRY_CLASS == null) {
-            return false;
-        }
-        return GEOMETRY_CLASS.isAssignableFrom(x);
-    }
-
-    /**
-     * Check whether a given object is a Geometry object.
-     *
-     * @param x the object
-     * @return true if it is a Geometry object
-     */
-    public static boolean isGeometry(Object x) {
-        if (x == null) {
-            return false;
-        }
-        return isGeometryClass(x.getClass());
     }
 
     /**

@@ -766,9 +766,9 @@ public class Transfer {
         }
         case GEOMETRY:
             if (version >= Constants.TCP_PROTOCOL_VERSION_14) {
-                return ValueGeometry.get(readBytes());
+                return Value.getGeometryFactory().get(readBytes());
             }
-            return ValueGeometry.get(readString());
+            return Value.getGeometryFactory().get(readString());
         case INTERVAL: {
             int ordinal = readByte();
             boolean negative = ordinal < 0;

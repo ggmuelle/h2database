@@ -14,11 +14,12 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+
 import org.h2.api.ErrorCode;
 import org.h2.store.fs.FileUtils;
 import org.h2.test.TestBase;
 import org.h2.test.TestDb;
-import org.h2.value.DataType;
+import org.h2.value.ValueGeometry;
 
 /**
  * Tests the linked table feature (CREATE LINKED TABLE).
@@ -697,7 +698,7 @@ public class TestLinkedTable extends TestDb {
         if (config.memory && config.mvStore) {
             return;
         }
-        if (DataType.GEOMETRY_CLASS == null) {
+        if (!ValueGeometry.isGeometryFactoryInitialized()) {
             return;
         }
         org.h2.Driver.load();

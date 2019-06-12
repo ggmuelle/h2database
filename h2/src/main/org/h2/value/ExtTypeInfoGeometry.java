@@ -54,7 +54,7 @@ public final class ExtTypeInfoGeometry extends ExtTypeInfo {
         if (value.getValueType() != Value.GEOMETRY) {
             value = value.convertTo(Value.GEOMETRY);
         }
-        ValueGeometry g = (ValueGeometry) value;
+        ValueGeometry<?> g = (ValueGeometry<?>) value;
         if (type != 0 && g.getTypeAndDimensionSystem() != type || srid != null && g.getSRID() != srid) {
             throw DbException.get(ErrorCode.CHECK_CONSTRAINT_VIOLATED_1,
                     toSQL(g.getTypeAndDimensionSystem(), g.getSRID()) + " <> " + toString());

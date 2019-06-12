@@ -5,12 +5,8 @@
  */
 package org.h2.index;
 
-import static org.h2.util.geometry.GeometryUtils.MAX_X;
-import static org.h2.util.geometry.GeometryUtils.MAX_Y;
-import static org.h2.util.geometry.GeometryUtils.MIN_X;
-import static org.h2.util.geometry.GeometryUtils.MIN_Y;
-
 import java.util.Iterator;
+
 import org.h2.command.dml.AllColumnsForPlan;
 import org.h2.engine.Session;
 import org.h2.message.DbException;
@@ -27,7 +23,6 @@ import org.h2.table.Table;
 import org.h2.table.TableFilter;
 import org.h2.value.Value;
 import org.h2.value.ValueGeometry;
-import org.h2.value.ValueNull;
 
 /**
  * This is an index based on a MVR-TreeMap.
@@ -126,21 +121,15 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
         if (closed) {
             throw DbException.throwInternalError();
         }
-        treeMap.add(getKey(row), row.getKey());
+        treeMap.add(getEnvelope(row), row.getKey());
     }
 
-    private SpatialKey getKey(SearchRow row) {
+    private SpatialKey getEnvelope(SearchRow row) {
         if (row == null) {
             return null;
         }
         Value v = row.getValue(columnIds[0]);
-        double[] env;
-        if (v == ValueNull.INSTANCE ||
-                (env = ((ValueGeometry) v.convertTo(Value.GEOMETRY)).getEnvelopeNoCopy()) == null) {
-            return new SpatialKey(row.getKey());
-        }
-        return new SpatialKey(row.getKey(),
-                (float) env[MIN_X], (float) env[MAX_X], (float) env[MIN_Y], (float) env[MAX_Y]);
+        return ((ValueGeometry<?>) v.convertTo(Value.GEOMETRY)).getSpatialKey(row.getKey());
     }
 
     @Override
@@ -148,7 +137,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
         if (closed) {
             throw DbException.throwInternalError();
         }
-        if (!treeMap.remove(getKey(row), row.getKey())) {
+        if (!treeMap.remove(getEnvelope(row), row.getKey())) {
             throw DbException.throwInternalError("row not found");
         }
     }
@@ -174,7 +163,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
             return find(filter.getSession(), first, last);
         }
         return new SpatialCursor(
-                treeMap.findIntersectingKeys(getKey(intersection)), table,
+                treeMap.findIntersectingKeys(getEnvelope(intersection)), table,
                 filter.getSession());
     }
 

@@ -18,8 +18,13 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.Iterator;
+import java.util.ServiceLoader;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
+import org.h2.api.SpatialDriver;
+import org.h2.api.ValueGeometryFactory;
 import org.h2.engine.Mode;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
@@ -259,6 +264,20 @@ public abstract class Value extends VersionedValue {
      * The smallest Long value, as a BigDecimal.
      */
     public static final BigDecimal MIN_LONG_DECIMAL = BigDecimal.valueOf(Long.MIN_VALUE);
+    
+    /**
+     * Factory which provides a couple of methods to create a {@link IGeometry}
+     * instance.
+     */
+	private static final ValueGeometryFactory<? extends ValueGeometry<?>, ?> GEOMETRY_FACTORY;
+
+	static {
+		ServiceLoader<SpatialDriver> geometryFactories = ServiceLoader.load(SpatialDriver.class);
+		Iterator<SpatialDriver> geometryFactoryIterator = geometryFactories.iterator();
+		GEOMETRY_FACTORY = (geometryFactoryIterator.hasNext()
+				? geometryFactories.iterator().next().createGeometryFactory()
+				: null);
+	}
 
     /**
      * Check the range of the parameters.
@@ -509,7 +528,7 @@ public abstract class Value extends VersionedValue {
      * @param v the value to look for
      * @return the value in the cache or the value passed
      */
-    static Value cache(Value v) {
+    public static Value cache(Value v) {
         if (SysProperties.OBJECT_CACHE) {
             int hash = v.hashCode();
             Value[] cache;
@@ -1251,22 +1270,22 @@ public abstract class Value extends VersionedValue {
     }
 
     private Value convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
-        ValueGeometry result;
+        ValueGeometry<?> result;
         switch (getValueType()) {
         case BYTES:
-            result = ValueGeometry.getFromEWKB(getBytesNoCopy());
+            result = GEOMETRY_FACTORY.get(getBytesNoCopy());
             break;
         case JAVA_OBJECT:
             Object object = JdbcUtils.deserialize(getBytesNoCopy(), getDataHandler());
-            if (DataType.isGeometry(object)) {
-                result = ValueGeometry.getFromGeometry(object);
-                break;
+            if (GEOMETRY_FACTORY.isGeometryTypeSupported(object)) {
+            	result = GEOMETRY_FACTORY.getFromGeometry(object);
+            	break;
             }
             //$FALL-THROUGH$
         case TIMESTAMP_TZ:
             throw getDataConversionError(GEOMETRY);
         default:
-            result = ValueGeometry.get(getString());
+            result = GEOMETRY_FACTORY.get(getString());
         }
         return extTypeInfo != null ? extTypeInfo.cast(result) : result;
     }
@@ -1675,5 +1694,17 @@ public abstract class Value extends VersionedValue {
     protected DataHandler getDataHandler() {
         return null;
     }
+    
+	/**
+	 * Returns <code>true</code> if a IGeometryFactory is available and initialized.
+	 * 
+	 * @return
+	 */
+	public static boolean isGeometryFactoryInitialized() {
+		return GEOMETRY_FACTORY != null;
+	}
 
+	public static ValueGeometryFactory<? extends ValueGeometry<?>, ?> getGeometryFactory() {
+		return GEOMETRY_FACTORY;
+	}
 }

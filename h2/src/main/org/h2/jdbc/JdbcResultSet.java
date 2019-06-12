@@ -29,6 +29,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.Interval;
 import org.h2.api.TimestampWithTimeZone;
@@ -3937,7 +3938,7 @@ public class JdbcResultSet extends TraceObject implements ResultSet, JdbcResultS
             }
             ValueInterval v = (ValueInterval) value;
             return type.cast(new Interval(v.getQualifier(), false, v.getLeading(), v.getRemaining()));
-        } else if (DataType.isGeometryClass(type)) {
+        } else if (Value.getGeometryFactory().getGeometryType().isAssignableFrom(type)) {
             return type.cast(value.convertTo(Value.GEOMETRY).getObject());
         } else if (type == LocalDateTimeUtils.LOCAL_DATE) {
             return type.cast(LocalDateTimeUtils.valueToLocalDate(value));

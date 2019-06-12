@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
 import org.h2.engine.Database;
@@ -37,7 +38,6 @@ import org.h2.value.ValueDate;
 import org.h2.value.ValueDecimal;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueFloat;
-import org.h2.value.ValueGeometry;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueInterval;
 import org.h2.value.ValueJavaObject;
@@ -671,7 +671,7 @@ public class ValueDataType implements DataType {
             int len = readVarInt(buff);
             byte[] b = Utils.newBytes(len);
             buff.get(b, 0, len);
-            return ValueGeometry.get(b);
+            return Value.getGeometryFactory().get(b);
         }
         case SPATIAL_KEY_2D:
             return getSpatialDataType().read(buff);
