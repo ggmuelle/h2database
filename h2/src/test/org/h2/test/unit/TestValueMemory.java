@@ -36,7 +36,6 @@ import org.h2.value.ValueDate;
 import org.h2.value.ValueDecimal;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueFloat;
-import org.h2.value.ValueGeometry;
 import org.h2.value.ValueInt;
 import org.h2.value.ValueInterval;
 import org.h2.value.ValueJavaObject;
@@ -225,7 +224,7 @@ public class TestValueMemory extends TestBase implements DataHandler {
         case Value.STRING_FIXED:
             return ValueStringFixed.get(randomString(random.nextInt(100)));
         case Value.GEOMETRY:
-            return ValueGeometry.get("POINT (" + random.nextInt(100) + ' ' + random.nextInt(100) + ')');
+            return Value.getGeometryFactory().get("POINT (" + random.nextInt(100) + ' ' + random.nextInt(100) + ')');
         case Value.INTERVAL_YEAR:
         case Value.INTERVAL_MONTH:
         case Value.INTERVAL_DAY:

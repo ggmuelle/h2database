@@ -14,6 +14,7 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.InetAddress;
 import java.net.Socket;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
 import org.h2.engine.CastDataProvider;
@@ -817,9 +818,9 @@ public class Transfer {
         }
         case GEOMETRY:
             if (version >= Constants.TCP_PROTOCOL_VERSION_14) {
-                return ValueGeometry.get(readBytes());
+                return Value.getGeometryFactory().get(readBytes());
             }
-            return ValueGeometry.get(readString());
+            return Value.getGeometryFactory().get(readString());
         case INTERVAL: {
             int ordinal = readByte();
             boolean negative = ordinal < 0;
