@@ -34,7 +34,6 @@ import org.h2.value.ValueBoolean;
 import org.h2.value.ValueChar;
 import org.h2.value.ValueDate;
 import org.h2.value.ValueDouble;
-import org.h2.value.ValueGeometry;
 import org.h2.value.ValueInteger;
 import org.h2.value.ValueInterval;
 import org.h2.value.ValueJavaObject;
@@ -225,7 +224,7 @@ public class TestValueMemory extends TestBase implements DataHandler {
         case Value.CHAR:
             return ValueChar.get(randomString(random.nextInt(100)));
         case Value.GEOMETRY:
-            return ValueGeometry.get("POINT (" + random.nextInt(100) + ' ' + random.nextInt(100) + ')');
+            return Value.getGeometryFactory().get("POINT (" + random.nextInt(100) + ' ' + random.nextInt(100) + ')');
         case Value.INTERVAL_YEAR:
         case Value.INTERVAL_MONTH:
         case Value.INTERVAL_DAY:

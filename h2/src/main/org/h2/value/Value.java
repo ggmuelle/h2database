@@ -14,9 +14,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.ServiceLoader;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
+import org.h2.api.SpatialDriver;
+import org.h2.api.ValueGeometryFactory;
 import org.h2.engine.CastDataProvider;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
@@ -278,7 +282,21 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * The smallest Long value, as a BigDecimal.
      */
     public static final BigDecimal MIN_LONG_DECIMAL = BigDecimal.valueOf(Long.MIN_VALUE);
+    
+    /**
+     * Factory which provides a couple of methods to create a {@link IGeometry}
+     * instance.
+     */
+    private static final ValueGeometryFactory<? extends ValueGeometry<?>, ?> GEOMETRY_FACTORY;
 
+    static {
+        ServiceLoader<SpatialDriver> geometryFactories = ServiceLoader.load(SpatialDriver.class);
+        Iterator<SpatialDriver> geometryFactoryIterator = geometryFactories.iterator();
+        GEOMETRY_FACTORY = (geometryFactoryIterator.hasNext()
+                ? geometryFactories.iterator().next().createGeometryFactory()
+                : new JTSSpatialDriver().createGeometryFactory());
+    }
+    
     /**
      * Convert a value to the specified type without taking scale and precision
      * into account.
@@ -522,7 +540,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @param v the value to look for
      * @return the value in the cache or the value passed
      */
-    static Value cache(Value v) {
+    public static Value cache(Value v) {
         if (SysProperties.OBJECT_CACHE) {
             int hash = v.hashCode();
             Value[] cache;
@@ -1925,14 +1943,14 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      *            the extended data type information, or null
      * @return the GEOMETRY value
      */
-    public final ValueGeometry convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
-        ValueGeometry result;
+    public final ValueGeometry<?> convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
+        ValueGeometry<?> result;
         switch (getValueType()) {
         case GEOMETRY:
-            result = (ValueGeometry) this;
+            result = (ValueGeometry<?>) this;
             break;
         case VARBINARY:
-            result = ValueGeometry.getFromEWKB(getBytesNoCopy());
+            result = GEOMETRY_FACTORY.get(getBytesNoCopy());
             break;
         case JSON: {
             int srid = 0;
@@ -1943,7 +1961,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
                 }
             }
             try {
-                result = ValueGeometry.get(GeoJsonUtils.geoJsonToEwkb(getBytesNoCopy(), srid));
+                result = GEOMETRY_FACTORY.get(GeoJsonUtils.geoJsonToEwkb(getBytesNoCopy(), srid));
             } catch (RuntimeException ex) {
                 throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTraceSQL());
             }
@@ -1952,7 +1970,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case VARCHAR:
         case VARCHAR_IGNORECASE:
         case CHAR:
-            result = ValueGeometry.get(getString());
+            result = GEOMETRY_FACTORY.get(getString());
             break;
         default:
             throw getDataConversionError(GEOMETRY);
@@ -2464,6 +2482,19 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         rs.addColumn("X", "X", getType());
         rs.addRow(this);
         return rs;
+    }
+    
+    /**
+     * Returns <code>true</code> if a IGeometryFactory is available and initialized.
+     * 
+     * @return
+     */
+    public static boolean isGeometryFactoryInitialized() {
+        return GEOMETRY_FACTORY != null;
+    }
+
+    public static ValueGeometryFactory<? extends ValueGeometry<?>, ?> getGeometryFactory() {
+        return GEOMETRY_FACTORY;
     }
 
 }

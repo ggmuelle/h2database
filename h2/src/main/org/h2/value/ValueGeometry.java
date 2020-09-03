@@ -9,17 +9,12 @@ import static org.h2.util.geometry.EWKBUtils.EWKB_SRID;
 
 import java.util.Arrays;
 
-import org.h2.api.ErrorCode;
-import org.h2.message.DbException;
+import org.h2.mvstore.rtree.SpatialKey;
 import org.h2.util.Bits;
-import org.h2.util.StringUtils;
 import org.h2.util.geometry.EWKBUtils;
-import org.h2.util.geometry.EWKTUtils;
-import org.h2.util.geometry.GeometryUtils;
-import org.h2.util.geometry.GeometryUtils.EnvelopeAndDimensionSystemTarget;
 import org.h2.util.geometry.GeometryUtils.EnvelopeTarget;
-import org.h2.util.geometry.JTSUtils;
-import org.locationtech.jts.geom.Geometry;
+//import org.h2.util.geometry.JTSUtils;
+//import org.locationtech.jts.geom.Geometry;
 
 /**
  * Implementation of the GEOMETRY data type.
@@ -28,7 +23,7 @@ import org.locationtech.jts.geom.Geometry;
  * @author Noel Grandin
  * @author Nicolas Fortin, Atelier SIG, IRSTV FR CNRS 24888
  */
-public final class ValueGeometry extends ValueBytesBase {
+public abstract class ValueGeometry<T> extends ValueBytesBase {
 
     private static final double[] UNKNOWN_ENVELOPE = new double[0];
 
@@ -52,7 +47,7 @@ public final class ValueGeometry extends ValueBytesBase {
      * The value. Converted from WKB only on request as conversion from/to WKB
      * cost a significant amount of CPU cycles.
      */
-    private Object geometry;
+    private T geometry;
 
     /**
      * Create a new geometry object.
@@ -60,121 +55,133 @@ public final class ValueGeometry extends ValueBytesBase {
      * @param bytes the EWKB bytes
      * @param envelope the envelope
      */
-    private ValueGeometry(byte[] bytes, double[] envelope) {
+    protected ValueGeometry(byte[] bytes, double[] envelope, T geometry) {
         super(bytes);
-        if (bytes.length < 9 || bytes[0] != 0) {
-            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, StringUtils.convertBytesToHex(bytes));
-        }
+//        if (bytes.length < 9 || bytes[0] != 0) {
+//            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, StringUtils.convertBytesToHex(bytes));
+//        }
         this.value = bytes;
         this.envelope = envelope;
+        this.geometry = geometry;
         int t = Bits.readInt(bytes, 1);
         srid = (t & EWKB_SRID) != 0 ? Bits.readInt(bytes, 5) : 0;
         typeAndDimensionSystem = (t & 0xffff) % 1_000 + EWKBUtils.type2dimensionSystem(t) * 1_000;
     }
 
-    /**
-     * Get or create a geometry value for the given geometry.
-     *
-     * @param o the geometry object (of type
-     *            org.locationtech.jts.geom.Geometry)
-     * @return the value
-     */
-    public static ValueGeometry getFromGeometry(Object o) {
-        try {
-            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
-            Geometry g = (Geometry) o;
-            JTSUtils.parseGeometry(g, target);
-            return (ValueGeometry) Value.cache(new ValueGeometry( //
-                    JTSUtils.geometry2ewkb(g, target.getDimensionSystem()), target.getEnvelope()));
-        } catch (RuntimeException ex) {
-            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, String.valueOf(o));
-        }
-    }
-
-    /**
-     * Get or create a geometry value for the given geometry.
-     *
-     * @param s the WKT or EWKT representation of the geometry
-     * @return the value
-     */
-    public static ValueGeometry get(String s) {
-        try {
-            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
-            EWKTUtils.parseEWKT(s, target);
-            return (ValueGeometry) Value.cache(new ValueGeometry( //
-                    EWKTUtils.ewkt2ewkb(s, target.getDimensionSystem()), target.getEnvelope()));
-        } catch (RuntimeException ex) {
-            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, s);
-        }
-    }
-
-    /**
-     * Get or create a geometry value for the given geometry.
-     *
-     * @param s the WKT representation of the geometry
-     * @param srid the srid of the object
-     * @return the value
-     */
-    public static ValueGeometry get(String s, int srid) {
-        // This method is not used in H2, but preserved for H2GIS
-        return get(srid == 0 ? s : "SRID=" + srid + ';' + s);
-    }
-
-    /**
-     * Get or create a geometry value for the given internal EWKB representation.
-     *
-     * @param bytes the WKB representation of the geometry. May not be modified.
-     * @return the value
-     */
-    public static ValueGeometry get(byte[] bytes) {
-        return (ValueGeometry) Value.cache(new ValueGeometry(bytes, UNKNOWN_ENVELOPE));
-    }
-
-    /**
-     * Get or create a geometry value for the given EWKB value.
-     *
-     * @param bytes the WKB representation of the geometry
-     * @return the value
-     */
-    public static ValueGeometry getFromEWKB(byte[] bytes) {
-        try {
-            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
-            EWKBUtils.parseEWKB(bytes, target);
-            return (ValueGeometry) Value.cache(new ValueGeometry( //
-                    EWKBUtils.ewkb2ewkb(bytes, target.getDimensionSystem()), target.getEnvelope()));
-        } catch (RuntimeException ex) {
-            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, StringUtils.convertBytesToHex(bytes));
-        }
-    }
-
-    /**
-     * Creates a geometry value for the given envelope.
-     *
-     * @param envelope envelope. May not be modified.
-     * @return the value
-     */
-    public static Value fromEnvelope(double[] envelope) {
-        return envelope != null
-                ? Value.cache(new ValueGeometry(EWKBUtils.envelope2wkb(envelope), envelope))
-                : ValueNull.INSTANCE;
-    }
-
-    /**
-     * Get a copy of geometry object. Geometry object is mutable. The returned
-     * object is therefore copied before returning.
-     *
-     * @return a copy of the geometry object
-     */
-    public Geometry getGeometry() {
-        if (geometry == null) {
-            try {
-                geometry = JTSUtils.ewkb2geometry(value, getDimensionSystem());
-            } catch (RuntimeException ex) {
-                throw DbException.convert(ex);
-            }
-        }
-        return ((Geometry) geometry).copy();
-    }
+    public abstract T getGeometry();
+    
+    
+    @SuppressWarnings("unchecked")
+	public T getGeometryNoCopy() {
+    	if (geometry == null) {
+    		geometry = (T)getGeometryFactory().getGeometry(value);
+    	}
+    	return geometry;
+    }    
+    
+//    /**
+//     * Get or create a geometry value for the given geometry.
+//     *
+//     * @param o the geometry object (of type
+//     *            org.locationtech.jts.geom.Geometry)
+//     * @return the value
+//     */
+//    public static ValueGeometry getFromGeometry(Object o) {
+//        try {
+//            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
+//            Geometry g = (Geometry) o;
+//            JTSUtils.parseGeometry(g, target);
+//            return (ValueGeometry) Value.cache(new ValueGeometry( //
+//                    JTSUtils.geometry2ewkb(g, target.getDimensionSystem()), target.getEnvelope()));
+//        } catch (RuntimeException ex) {
+//            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, String.valueOf(o));
+//        }
+//    }
+//
+//    /**
+//     * Get or create a geometry value for the given geometry.
+//     *
+//     * @param s the WKT or EWKT representation of the geometry
+//     * @return the value
+//     */
+//    public static ValueGeometry get(String s) {
+//        try {
+//            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
+//            EWKTUtils.parseEWKT(s, target);
+//            return (ValueGeometry) Value.cache(new ValueGeometry( //
+//                    EWKTUtils.ewkt2ewkb(s, target.getDimensionSystem()), target.getEnvelope()));
+//        } catch (RuntimeException ex) {
+//            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, s);
+//        }
+//    }
+//
+//    /**
+//     * Get or create a geometry value for the given geometry.
+//     *
+//     * @param s the WKT representation of the geometry
+//     * @param srid the srid of the object
+//     * @return the value
+//     */
+//    public static ValueGeometry get(String s, int srid) {
+//        // This method is not used in H2, but preserved for H2GIS
+//        return get(srid == 0 ? s : "SRID=" + srid + ';' + s);
+//    }
+//
+//    /**
+//     * Get or create a geometry value for the given internal EWKB representation.
+//     *
+//     * @param bytes the WKB representation of the geometry. May not be modified.
+//     * @return the value
+//     */
+//    public static ValueGeometry get(byte[] bytes) {
+//        return (ValueGeometry) Value.cache(new ValueGeometry(bytes, UNKNOWN_ENVELOPE));
+//    }
+//
+//    /**
+//     * Get or create a geometry value for the given EWKB value.
+//     *
+//     * @param bytes the WKB representation of the geometry
+//     * @return the value
+//     */
+//    public static ValueGeometry getFromEWKB(byte[] bytes) {
+//        try {
+//            EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
+//            EWKBUtils.parseEWKB(bytes, target);
+//            return (ValueGeometry) Value.cache(new ValueGeometry( //
+//                    EWKBUtils.ewkb2ewkb(bytes, target.getDimensionSystem()), target.getEnvelope()));
+//        } catch (RuntimeException ex) {
+//            throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, StringUtils.convertBytesToHex(bytes));
+//        }
+//    }
+//
+//    /**
+//     * Creates a geometry value for the given envelope.
+//     *
+//     * @param envelope envelope. May not be modified.
+//     * @return the value
+//     */
+//    public static Value fromEnvelope(double[] envelope) {
+//        return envelope != null
+//                ? Value.cache(new ValueGeometry(EWKBUtils.envelope2wkb(envelope), envelope))
+//                : ValueNull.INSTANCE;
+//    }
+//
+//    /**
+//     * Get a copy of geometry object. Geometry object is mutable. The returned
+//     * object is therefore copied before returning.
+//     *
+//     * @return a copy of the geometry object
+//     */
+//    public Geometry getGeometry() {
+//        if (geometry == null) {
+//            try {
+//                geometry = JTSUtils.ewkb2geometry(value, getDimensionSystem());
+//            } catch (RuntimeException ex) {
+//                throw DbException.convert(ex);
+//            }
+//        }
+//        return ((Geometry) geometry).copy();
+//    }
 
     /**
      * Returns geometry type and dimension system in OGC geometry code format
@@ -234,18 +241,51 @@ public final class ValueGeometry extends ValueBytesBase {
      * @param r the other geometry
      * @return true if the two overlap
      */
-    public boolean intersectsBoundingBox(ValueGeometry r) {
-        return GeometryUtils.intersects(getEnvelopeNoCopy(), r.getEnvelopeNoCopy());
-    }
+//    public boolean intersectsBoundingBox(ValueGeometry<T> r) {
+//        return GeometryUtils.intersects(getEnvelopeNoCopy(), r.getEnvelopeNoCopy());
+//    }
+    protected abstract boolean _intersectsBoundingBox(ValueGeometry<T> r);
+    
+    /**
+     * Test if this geometry envelope intersects with the other geometry
+     * envelope.
+     * 
+     * @param r the other geometry
+     * @return true if the two overlap
+     */
+    @SuppressWarnings("unchecked")
+    public final boolean intersectsBoundingBox(ValueGeometry<?> r) {
+        if (!getClass().isInstance(r)) {
+            return false; // not supported and should never happen
+        }
 
+        return _intersectsBoundingBox((ValueGeometry<T>) r);
+    }
+    
     /**
      * Get the union.
      *
      * @param r the other geometry
      * @return the union of this geometry envelope and another geometry envelope
      */
-    public Value getEnvelopeUnion(ValueGeometry r) {
-        return fromEnvelope(GeometryUtils.union(getEnvelopeNoCopy(), r.getEnvelopeNoCopy()));
+//    public Value getEnvelopeUnion(ValueGeometry<T> r) {
+//        return fromEnvelope(GeometryUtils.union(getEnvelopeNoCopy(), r.getEnvelopeNoCopy()));
+//    }
+    protected abstract Value _getEnvelopeUnion(ValueGeometry<T> r);
+    
+    /**
+     * Get the union.
+     *
+     * @param r the other geometry
+     * @return the union of this geometry envelope and another geometry envelope
+     */
+    @SuppressWarnings("unchecked")
+    public final Value getEnvelopeUnion(ValueGeometry<?> r) {
+        if (!getClass().isInstance(r)) {
+            return ValueNull.INSTANCE; // not supported and should never happen
+        }
+
+        return _getEnvelopeUnion((ValueGeometry<T>) r);
     }
 
     @Override
@@ -266,10 +306,10 @@ public final class ValueGeometry extends ValueBytesBase {
         return super.getSQL(builder, DEFAULT_SQL_FLAGS);
     }
 
-    @Override
-    public String getString() {
-        return EWKTUtils.ewkb2ewkt(value, getDimensionSystem());
-    }
+//    @Override
+//    public String getString() {
+//        return EWKTUtils.ewkb2ewkt(value, getDimensionSystem());
+//    }
 
     @Override
     public int hashCode() {
@@ -286,8 +326,9 @@ public final class ValueGeometry extends ValueBytesBase {
 
     @Override
     public Object getObject() {
-        if (DataType.GEOMETRY_CLASS != null) {
-            return getGeometry();
+//        if (DataType.GEOMETRY_CLASS != null) {
+    	if (ValueGeometry.isGeometryFactoryInitialized()) {
+    		return getGeometry();
         }
         return getString();
     }
@@ -296,5 +337,12 @@ public final class ValueGeometry extends ValueBytesBase {
     public int getMemory() {
         return value.length * 20 + 24;
     }
-
+    
+    /**
+     * Returns the {@link SpatialKey} for the given row key. 
+     * @param id the row key
+     * @return the {@link SpatialKey} for the given row key
+     */        
+    public abstract SpatialKey getSpatialKey(long id);
+    
 }

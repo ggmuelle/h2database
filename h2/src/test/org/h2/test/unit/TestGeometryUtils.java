@@ -34,6 +34,7 @@ import org.h2.util.geometry.GeometryUtils.EnvelopeAndDimensionSystemTarget;
 import org.h2.util.geometry.GeometryUtils.Target;
 import org.h2.util.geometry.JTSUtils;
 import org.h2.util.geometry.JTSUtils.GeometryTarget;
+import org.h2.value.Value;
 import org.h2.value.ValueGeometry;
 import org.locationtech.jts.geom.CoordinateSequence;
 import org.locationtech.jts.geom.Envelope;
@@ -383,7 +384,7 @@ public class TestGeometryUtils extends TestBase {
     }
 
     private void testValueGeometryProperties(byte[] ewkb) {
-        ValueGeometry vg = ValueGeometry.getFromEWKB(ewkb);
+        ValueGeometry<?> vg = Value.getGeometryFactory().get(ewkb);
         DimensionSystemTarget target = new DimensionSystemTarget();
         EWKBUtils.parseEWKB(ewkb, target);
         int dimensionSystem = target.getDimensionSystem();
@@ -456,7 +457,7 @@ public class TestGeometryUtils extends TestBase {
         assertEquals(10, gc.getSRID());
         assertEquals(10, gc.getGeometryN(0).getSRID());
         assertEquals(ewkb, JTSUtils.geometry2ewkb(gc));
-        ValueGeometry vg = ValueGeometry.getFromEWKB(ewkb);
+        ValueGeometry<?> vg = Value.getGeometryFactory().get(ewkb);
         assertEquals(10, vg.getSRID());
         assertEquals(GEOMETRY_COLLECTION, vg.getTypeAndDimensionSystem());
         assertEquals("SRID=-1;POINT EMPTY", EWKTUtils.ewkb2ewkt(EWKTUtils.ewkt2ewkb(" srid=-1  ; POINT  EMPTY ")));

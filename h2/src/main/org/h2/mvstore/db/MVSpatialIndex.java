@@ -130,10 +130,11 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
     @Override
     public void add(Session session, Row row) {
         TransactionMap<SpatialKey, Value> map = getMap(session);
-        SpatialKey key = getKey(row);
-
-        if (key.isNull()) {
-            return;
+//        SpatialKey key = getKey(row);
+        SpatialKey key = getEnvelope(row);
+//        if (key.isNull()) {
+        if (key == null || key.isNull()) {
+        	return;
         }
 
         if (indexType.isUnique()) {
@@ -175,9 +176,11 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
 
     @Override
     public void remove(Session session, Row row) {
-        SpatialKey key = getKey(row);
+//        SpatialKey key = getKey(row);
+        SpatialKey key = getEnvelope(row);
 
-        if (key.isNull()) {
+        if (key == null || key.isNull()) {
+//        if (key.isNull()) {
             return;
         }
 
@@ -208,7 +211,8 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
             return find(session, first, last);
         }
         Iterator<SpatialKey> cursor =
-                spatialMap.findIntersectingKeys(getKey(intersection));
+//                spatialMap.findIntersectingKeys(getKey(intersection));
+        		spatialMap.findIntersectingKeys(getEnvelope(intersection));
         TransactionMap<SpatialKey, Value> map = getMap(session);
         Iterator<SpatialKey> it = new SpatialKeyIterator(map, cursor, false);
         return new MVStoreCursor(session, it, mvTable);
@@ -259,22 +263,36 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
                     bmaxyf = maxyf;
                 }
             }
-            return ValueGeometry.fromEnvelope(new double[] {bminxf, bmaxxf, bminyf, bmaxyf});
+//            return ValueGeometry.fromEnvelope(new double[] {bminxf, bmaxxf, bminyf, bmaxyf});
+            return Value.getGeometryFactory().get(new double[] {bminxf, bmaxxf, bminyf, bmaxyf});
         }
         return ValueNull.INSTANCE;
     }
 
-    private SpatialKey getKey(SearchRow row) {
-        Value v = row.getValue(columnIds[0]);
-        double[] env;
-        if (v == ValueNull.INSTANCE || (env = v.convertToGeometry(null).getEnvelopeNoCopy()) == null) {
-            return new SpatialKey(row.getKey());
+//    private SpatialKey getKey(SearchRow row) {
+//        Value v = row.getValue(columnIds[0]);
+//        double[] env;
+//        if (v == ValueNull.INSTANCE || (env = v.convertToGeometry(null).getEnvelopeNoCopy()) == null) {
+//            return new SpatialKey(row.getKey());
+//        }
+//        return new SpatialKey(row.getKey(),
+//                (float) env[MIN_X], (float) env[MAX_X],
+//                (float) env[MIN_Y], (float) env[MAX_Y]);
+//    }
+    
+    private SpatialKey getEnvelope(SearchRow row) {
+        if (row == null) {
+            return null;
         }
-        return new SpatialKey(row.getKey(),
-                (float) env[MIN_X], (float) env[MAX_X],
-                (float) env[MIN_Y], (float) env[MAX_Y]);
-    }
+        Value v = row.getValue(columnIds[0]);
+        Object value = v.convertTo(Value.GEOMETRY);
+        if (value instanceof ValueGeometry) {
+            return ((ValueGeometry<?>) value).getSpatialKey(row.getKey());
+        }
 
+        return null;
+    }
+    
     @Override
     public MVTable getTable() {
         return mvTable;
@@ -498,7 +516,7 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
                 if (hasBounds) {
                     if ((minxf <= bminxf || maxxf >= bmaxxf || minyf <= bminyf || maxyf >= bmaxyf)
                             && map.containsKey(key)) {
-                        double[] env = ((ValueGeometry) mvTable.getRow(session, key.getId()).getValue(columnId))
+                        double[] env = ((ValueGeometry<?>) mvTable.getRow(session, key.getId()).getValue(columnId))
                                 .getEnvelopeNoCopy();
                         double minxd = env[MIN_X], maxxd = env[MAX_X], minyd = env[MIN_Y], maxyd = env[MAX_Y];
                         if (minxd < bminxd) {
@@ -520,7 +538,7 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
                     }
                 } else if (map.containsKey(key)) {
                     hasBounds = true;
-                    double[] env = ((ValueGeometry) mvTable.getRow(session, key.getId()).getValue(columnId))
+                    double[] env = ((ValueGeometry<?>) mvTable.getRow(session, key.getId()).getValue(columnId))
                             .getEnvelopeNoCopy();
                     bminxf = minxf;
                     bminxd = env[MIN_X];
@@ -542,7 +560,7 @@ public class MVSpatialIndex extends BaseIndex implements SpatialIndex, MVIndex<S
         }
 
         Value getBounds() {
-            return hasBounds ? ValueGeometry.fromEnvelope(new double[] {bminxd, bmaxxd, bminyd, bmaxyd})
+            return hasBounds ? Value.getGeometryFactory().get(new double[] {bminxd, bmaxxd, bminyd, bmaxyd})
                     : ValueNull.INSTANCE;
         }
 

@@ -5,11 +5,6 @@
  */
 package org.h2.pagestore.db;
 
-import static org.h2.util.geometry.GeometryUtils.MAX_X;
-import static org.h2.util.geometry.GeometryUtils.MAX_Y;
-import static org.h2.util.geometry.GeometryUtils.MIN_X;
-import static org.h2.util.geometry.GeometryUtils.MIN_Y;
-
 import java.util.Iterator;
 
 import org.h2.command.query.AllColumnsForPlan;
@@ -31,7 +26,6 @@ import org.h2.table.IndexColumn;
 import org.h2.table.Table;
 import org.h2.table.TableFilter;
 import org.h2.value.Value;
-import org.h2.value.ValueNull;
 
 /**
  * This is an index based on a MVR-TreeMap.
@@ -130,28 +124,37 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
         if (closed) {
             throw DbException.throwInternalError();
         }
-        treeMap.add(getKey(row), row.getKey());
+        treeMap.add(getEnvelope(row), row.getKey());
     }
 
-    private SpatialKey getKey(SearchRow row) {
+//    private SpatialKey getKey(SearchRow row) {
+//        if (row == null) {
+//            return null;
+//        }
+//        Value v = row.getValue(columnIds[0]);
+//        double[] env;
+//        if (v == ValueNull.INSTANCE || (env = v.convertToGeometry(null).getEnvelopeNoCopy()) == null) {
+//            return new SpatialKey(row.getKey());
+//        }
+//        return new SpatialKey(row.getKey(),
+//                (float) env[MIN_X], (float) env[MAX_X], (float) env[MIN_Y], (float) env[MAX_Y]);
+//    }
+    
+    private SpatialKey getEnvelope(SearchRow row) {
         if (row == null) {
             return null;
         }
-        Value v = row.getValue(columnIds[0]);
-        double[] env;
-        if (v == ValueNull.INSTANCE || (env = v.convertToGeometry(null).getEnvelopeNoCopy()) == null) {
-            return new SpatialKey(row.getKey());
-        }
-        return new SpatialKey(row.getKey(),
-                (float) env[MIN_X], (float) env[MAX_X], (float) env[MIN_Y], (float) env[MAX_Y]);
+        Value v = row.getValue(columnIds[0]);    
+        return v.convertToGeometry( null ).getSpatialKey(row.getKey());
     }
-
+    
+    
     @Override
     public void remove(Session session, Row row) {
         if (closed) {
             throw DbException.throwInternalError();
         }
-        if (!treeMap.remove(getKey(row), row.getKey())) {
+        if (!treeMap.remove(getEnvelope(row), row.getKey())) {
             throw DbException.throwInternalError("row not found");
         }
     }
@@ -166,7 +169,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
         if (intersection == null) {
             return find(session, first, last);
         }
-        return new SpatialCursor(treeMap.findIntersectingKeys(getKey(intersection)), table, session);
+        return new SpatialCursor(treeMap.findIntersectingKeys(getEnvelope(intersection)), table, session);
     }
 
     @Override

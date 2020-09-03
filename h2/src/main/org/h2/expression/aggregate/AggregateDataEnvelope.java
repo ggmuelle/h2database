@@ -66,7 +66,8 @@ class AggregateDataEnvelope extends AggregateData {
 
     @Override
     Value getValue(Session session) {
-        return ValueGeometry.fromEnvelope(envelope);
+        return Value.getGeometryFactory().get(envelope);
+//        return ValueGeometry.fromEnvelope(envelope);
     }
 
 }

@@ -25,12 +25,12 @@ public class Constants {
     /**
      * The build id is incremented for each public release.
      */
-    public static final int BUILD_ID = 200;
+    public static final int BUILD_ID = 201;
 
     /**
      * The build id of the last stable release.
      */
-    public static final int BUILD_ID_STABLE = 199;
+    public static final int BUILD_ID_STABLE = 200;
 
     /**
      * Whether this is a snapshot version.

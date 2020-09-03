@@ -9,7 +9,6 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
@@ -74,10 +73,10 @@ public class DataType {
      * The Geometry class. This object is null if the jts jar file is not in the
      * classpath.
      */
-    public static final Class<?> GEOMETRY_CLASS;
-
-    private static final String GEOMETRY_CLASS_NAME =
-            "org.locationtech.jts.geom.Geometry";
+//    public static final Class<?> GEOMETRY_CLASS;
+//
+//    private static final String GEOMETRY_CLASS_NAME =
+//            "org.locationtech.jts.geom.Geometry";
 
     /**
      * The list of types.
@@ -180,14 +179,14 @@ public class DataType {
     public boolean hidden;
 
     static {
-        Class<?> g;
-        try {
-            g = JdbcUtils.loadUserClass(GEOMETRY_CLASS_NAME);
-        } catch (Exception e) {
-            // class is not in the classpath - ignore
-            g = null;
-        }
-        GEOMETRY_CLASS = g;
+//        Class<?> g;
+//        try {
+//            g = JdbcUtils.loadUserClass(GEOMETRY_CLASS_NAME);
+//        } catch (Exception e) {
+//            // class is not in the classpath - ignore
+//            g = null;
+//        }
+//        GEOMETRY_CLASS = g;
 
         DataType dataType = new DataType();
         dataType.defaultPrecision = dataType.maxPrecision = dataType.minPrecision = ValueNull.PRECISION;
@@ -773,10 +772,12 @@ public class DataType {
             }
             case Value.GEOMETRY: {
                 Object x = rs.getObject(columnIndex);
-                if (x == null) {
+                if (x == null || !Value.getGeometryFactory().isGeometryTypeSupported(x)) {
+//                if (x == null) {
                     return ValueNull.INSTANCE;
                 }
-                return ValueGeometry.getFromGeometry(x);
+                return Value.getGeometryFactory().getFromGeometry(x);
+//                return ValueGeometry.getFromGeometry(x);
             }
             case Value.INTERVAL_YEAR:
             case Value.INTERVAL_MONTH:
@@ -909,7 +910,8 @@ public class DataType {
         case Value.RESULT_SET:
             return ResultSet.class.getName();
         case Value.GEOMETRY:
-            return GEOMETRY_CLASS != null ? GEOMETRY_CLASS_NAME : String.class.getName();
+            return Value.getGeometryFactory().getGeometryType().getName();
+//        	return GEOMETRY_CLASS != null ? GEOMETRY_CLASS_NAME : String.class.getName();
         case Value.INTERVAL_YEAR:
         case Value.INTERVAL_MONTH:
         case Value.INTERVAL_DAY:
@@ -1204,7 +1206,8 @@ public class DataType {
         } else if (Object[].class.isAssignableFrom(x)) {
             // this includes String[] and so on
             return Value.ARRAY;
-        } else if (isGeometryClass(x)) {
+        } else if (Value.getGeometryFactory().getGeometryType().isAssignableFrom(x)) {
+//        } else if (isGeometryClass(x)) {
             return Value.GEOMETRY;
         } else if (LocalDate.class == x) {
             return Value.DATE;
@@ -1246,8 +1249,8 @@ public class DataType {
             return ValueBigint.get((Long) x);
         } else if (x instanceof Integer) {
             return ValueInteger.get((Integer) x);
-        } else if (x instanceof BigInteger) {
-            return ValueNumeric.get((BigInteger) x);
+//        } else if (x instanceof BigInteger) {
+//            return ValueNumeric.get((BigInteger) x);
         } else if (x instanceof BigDecimal) {
             return ValueNumeric.get((BigDecimal) x);
         } else if (x instanceof Boolean) {
@@ -1295,8 +1298,10 @@ public class DataType {
             return ValueArray.get(v);
         } else if (x instanceof Character) {
             return ValueChar.get(((Character) x).toString());
-        } else if (isGeometry(x)) {
-            return ValueGeometry.getFromGeometry(x);
+//        } else if (isGeometry(x)) {
+//            return ValueGeometry.getFromGeometry(x);
+        } else if (Value.getGeometryFactory().isGeometryTypeSupported(x)) {
+            return Value.getGeometryFactory().getFromGeometry(x);
         } else if (clazz == LocalDate.class) {
             return JSR310Utils.localDateToValue(x);
         } else if (clazz == LocalTime.class) {
@@ -1363,31 +1368,31 @@ public class DataType {
     }
 
 
-    /**
-     * Check whether a given class matches the Geometry class.
-     *
-     * @param x the class
-     * @return true if it is a Geometry class
-     */
-    public static boolean isGeometryClass(Class<?> x) {
-        if (x == null || GEOMETRY_CLASS == null) {
-            return false;
-        }
-        return GEOMETRY_CLASS.isAssignableFrom(x);
-    }
-
-    /**
-     * Check whether a given object is a Geometry object.
-     *
-     * @param x the object
-     * @return true if it is a Geometry object
-     */
-    public static boolean isGeometry(Object x) {
-        if (x == null) {
-            return false;
-        }
-        return isGeometryClass(x.getClass());
-    }
+//    /**
+//     * Check whether a given class matches the Geometry class.
+//     *
+//     * @param x the class
+//     * @return true if it is a Geometry class
+//     */
+//    public static boolean isGeometryClass(Class<?> x) {
+//        if (x == null || GEOMETRY_CLASS == null) {
+//            return false;
+//        }
+//        return GEOMETRY_CLASS.isAssignableFrom(x);
+//    }
+//
+//    /**
+//     * Check whether a given object is a Geometry object.
+//     *
+//     * @param x the object
+//     * @return true if it is a Geometry object
+//     */
+//    public static boolean isGeometry(Object x) {
+//        if (x == null) {
+//            return false;
+//        }
+//        return isGeometryClass(x.getClass());
+//    }
 
     /**
      * Get a data type object from a type name.

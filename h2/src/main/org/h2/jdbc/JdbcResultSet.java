@@ -4005,7 +4005,8 @@ public class JdbcResultSet extends TraceObject implements ResultSet, JdbcResultS
             }
             ValueInterval v = (ValueInterval) value;
             return (T) new Interval(v.getQualifier(), false, v.getLeading(), v.getRemaining());
-        } else if (DataType.isGeometryClass(type)) {
+        } else if (Value.getGeometryFactory().getGeometryType().isAssignableFrom(type)) {
+//        } else if (DataType.isGeometryClass(type)) {
             return (T) value.convertToGeometry(null).getObject();
         } else if (type == LocalDate.class) {
             return (T) JSR310Utils.valueToLocalDate(value, conn);
