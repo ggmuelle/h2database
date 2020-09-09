@@ -54,7 +54,7 @@ public class MetaRecord implements Comparable<MetaRecord> {
         r.setValue(0, ValueInteger.get(obj.getId()));
         r.setValue(1, ValueInteger.get(0));
         r.setValue(2, ValueInteger.get(obj.getType()));
-        r.setValue(3, ValueVarchar.get(obj.getCreateSQL()));
+        r.setValue(3, ValueVarchar.get(obj.getCreateSQLForMeta()));
     }
 
     public MetaRecord(SearchRow r) {
@@ -70,7 +70,7 @@ public class MetaRecord implements Comparable<MetaRecord> {
      * @param systemSession the system session
      * @param listener the database event listener
      */
-    void prepareAndExecute(Database db, Session systemSession, DatabaseEventListener listener) {
+    void prepareAndExecute(Database db, SessionLocal systemSession, DatabaseEventListener listener) {
         try {
             Prepared command = systemSession.prepare(sql);
             command.setPersistedObjectId(id);
@@ -88,7 +88,7 @@ public class MetaRecord implements Comparable<MetaRecord> {
      * @param listener the database event listener
      * @return the prepared command
      */
-    Prepared prepare(Database db, Session systemSession, DatabaseEventListener listener) {
+    Prepared prepare(Database db, SessionLocal systemSession, DatabaseEventListener listener) {
         try {
             Prepared command = systemSession.prepare(sql);
             command.setPersistedObjectId(id);

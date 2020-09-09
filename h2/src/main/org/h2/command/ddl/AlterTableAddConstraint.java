@@ -17,7 +17,7 @@ import org.h2.constraint.ConstraintUnique;
 import org.h2.engine.Constants;
 import org.h2.engine.Database;
 import org.h2.engine.Right;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.index.Index;
 import org.h2.index.IndexType;
@@ -55,7 +55,7 @@ public class AlterTableAddConstraint extends SchemaCommand {
     private final ArrayList<Index> createdIndexes = new ArrayList<>();
     private ConstraintUnique createdUniqueConstraint;
 
-    public AlterTableAddConstraint(Session session, Schema schema, int type, boolean ifNotExists) {
+    public AlterTableAddConstraint(SessionLocal session, Schema schema, int type, boolean ifNotExists) {
         super(session, schema);
         this.ifNotExists = ifNotExists;
         this.type = type;
@@ -73,7 +73,7 @@ public class AlterTableAddConstraint extends SchemaCommand {
     }
 
     @Override
-    public int update() {
+    public long update() {
         try {
             return tryUpdate();
         } catch (DbException e) {
@@ -210,9 +210,9 @@ public class AlterTableAddConstraint extends SchemaCommand {
             if (refIndexColumns.length != columnCount) {
                 throw DbException.get(ErrorCode.COLUMN_COUNT_DOES_NOT_MATCH);
             }
-            for (IndexColumn indexColumn : refIndexColumns) {
+            for (IndexColumn indexColumn : indexColumns) {
                 Column column = indexColumn.column;
-                if (column.getGenerated()) {
+                if (column.isGeneratedAlways()) {
                     switch (deleteAction) {
                     case SET_DEFAULT:
                     case SET_NULL:
@@ -299,14 +299,15 @@ public class AlterTableAddConstraint extends SchemaCommand {
         }
         int id;
         String name;
+        Schema tableSchema = table.getSchema();
         if (forForeignKey) {
             id = session.getDatabase().allocateObjectId();
-            name = getSchema().getUniqueConstraintName(session, table);
+            name = tableSchema.getUniqueConstraintName(session, table);
         } else {
             id = getObjectId();
             name = generateConstraintName(table);
         }
-        ConstraintUnique unique = new ConstraintUnique(getSchema(), id, name, table, false);
+        ConstraintUnique unique = new ConstraintUnique(tableSchema, id, name, table, false);
         unique.setColumns(indexColumns);
         unique.setIndex(index, isOwner);
         return unique;

@@ -8,11 +8,10 @@ package org.h2.value;
 import java.nio.charset.StandardCharsets;
 
 import org.h2.engine.SysProperties;
-import org.h2.util.MathUtils;
 import org.h2.util.Utils;
 
 /**
- * Implementation of the VARBINARY data type.
+ * Implementation of the BINARY VARYING data type.
  */
 public final class ValueVarbinary extends ValueBytesBase {
 
@@ -68,7 +67,7 @@ public final class ValueVarbinary extends ValueBytesBase {
         TypeInfo type = this.type;
         if (type == null) {
             long precision = value.length;
-            this.type = type = new TypeInfo(VARBINARY, precision, 0, MathUtils.convertLongToInt(precision * 2), null);
+            this.type = type = new TypeInfo(VARBINARY, precision, 0, null);
         }
         return type;
     }

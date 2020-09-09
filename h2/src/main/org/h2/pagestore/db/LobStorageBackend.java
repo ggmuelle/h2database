@@ -16,9 +16,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import org.h2.api.ErrorCode;
+import org.h2.engine.Constants;
 import org.h2.engine.Database;
+import org.h2.engine.SessionLocal;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.message.DbException;
+import org.h2.message.TraceSystem;
+import org.h2.mvstore.DataUtils;
 import org.h2.store.CountingReaderInputStream;
 import org.h2.store.LobStorageFrontend;
 import org.h2.store.LobStorageInterface;
@@ -28,6 +32,8 @@ import org.h2.util.MathUtils;
 import org.h2.util.Utils;
 import org.h2.value.Value;
 import org.h2.value.ValueLob;
+import org.h2.value.ValueLobDatabase;
+import org.h2.value.ValueLobInMemory;
 
 /**
  * This class stores LOB objects in the database, in tables. This is the
@@ -114,8 +120,13 @@ public class LobStorageBackend implements LobStorageInterface {
                 return;
             }
             init = true;
-            conn = database.getLobConnectionForRegularUse();
-            JdbcConnection initConn = database.getLobConnectionForInit();
+            String systemUserName = database.getSystemUser().getName();
+            SessionLocal session = database.getLobSession();
+            session.getTrace().setLevel(TraceSystem.OFF);
+            conn = new JdbcConnection(session, systemUserName, Constants.CONN_URL_INTERNAL);
+            session = database.getSystemSession();
+            session.getTrace().setLevel(TraceSystem.OFF);
+            JdbcConnection initConn = new JdbcConnection(session, systemUserName, Constants.CONN_URL_INTERNAL);
             try {
                 Statement stat = initConn.createStatement();
                 // stat.execute("SET UNDO_LOG 0");
@@ -138,7 +149,7 @@ public class LobStorageBackend implements LobStorageInterface {
                     rs = prep.executeQuery();
                     if (rs.next()) {
                         create = false;
-                        prep = initConn.prepareStatement("SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE "
+                        prep = initConn.prepareStatement("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE "
                                 + "TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?");
                         prep.setString(1, "INFORMATION_SCHEMA");
                         prep.setString(2, "LOB_DATA");
@@ -282,7 +293,7 @@ public class LobStorageBackend implements LobStorageInterface {
 
     @Override
     public void removeLob(ValueLob lob) {
-        removeLob(lob.getLobId());
+        removeLob(((ValueLobDatabase)lob).getLobId());
     }
 
     private void removeLob(long lobId) {
@@ -333,20 +344,18 @@ public class LobStorageBackend implements LobStorageInterface {
     }
 
     @Override
-    public InputStream getInputStream(ValueLob lob, byte[] hmac,
-            long byteCount) throws IOException {
+    public InputStream getInputStream(long lobId, long byteCount) throws IOException {
         try {
             init();
             assertNotHolds(conn.getSession());
             // see locking discussion at the top
             synchronized (database) {
                 synchronized (conn.getSession()) {
-                    long lobId = lob.getLobId();
                     return new LobInputStream(lobId, byteCount);
                 }
             }
         } catch (SQLException e) {
-            throw DbException.convertToIOException(e);
+            throw DataUtils.convertToIOException(e);
         }
     }
 
@@ -403,7 +412,7 @@ public class LobStorageBackend implements LobStorageInterface {
                     // For a CLOB, precision is length in chars
                     long precision = countingReaderForClob == null ?
                             small.length : countingReaderForClob.getLength();
-                    return ValueLob.createSmallLob(type, small, precision);
+                    return ValueLobInMemory.createSmallLob(type, small, precision);
                 }
                 // For a BLOB, precision is length in bytes.
                 // For a CLOB, precision is length in chars
@@ -436,8 +445,8 @@ public class LobStorageBackend implements LobStorageInterface {
                 prep.setInt(3, tableId);
                 prep.execute();
                 reuse(sql, prep);
-                return ValueLob.create(type,
-                        database, tableId, lobId, null, precision);
+                return ValueLobDatabase.create(type,
+                        database, tableId, lobId, precision);
             }
         }
     }
@@ -448,7 +457,8 @@ public class LobStorageBackend implements LobStorageInterface {
     }
 
     @Override
-    public ValueLob copyLob(ValueLob old, int tableId, long length) {
+    public ValueLob copyLob(ValueLob old_, int tableId, long length) {
+        ValueLobDatabase old = (ValueLobDatabase) old_;
         int type = old.getValueType();
         long oldLobId = old.getLobId();
         assertNotHolds(conn.getSession());
@@ -481,11 +491,11 @@ public class LobStorageBackend implements LobStorageInterface {
                         prep.executeUpdate();
                         reuse(sql, prep);
 
-                        v = ValueLob.create(type, database, tableId, lobId, null, length);
+                        v = ValueLobDatabase.create(type, database, tableId, lobId, length);
                     } else {
                         // Recovery process, no need to copy LOB using normal
                         // infrastructure
-                        v = ValueLob.create(type, database, tableId, oldLobId, null, length);
+                        v = ValueLobDatabase.create(type, database, tableId, oldLobId, length);
                     }
                     return v;
                 } catch (SQLException e) {
@@ -707,14 +717,17 @@ public class LobStorageBackend implements LobStorageInterface {
             if (n <= 0) {
                 return 0;
             }
+            if (n > remainingBytes) {
+                n = remainingBytes;
+            }
             long remaining = n;
             remaining -= skipSmall(remaining);
             if (remaining > BLOCK_LENGTH) {
-                while (remaining > BLOCK_LENGTH) {
+                do {
                     remaining -= BLOCK_LENGTH;
                     remainingBytes -= BLOCK_LENGTH;
                     lobMapIndex++;
-                }
+                } while (remaining > BLOCK_LENGTH);
                 bufferPos = 0;
                 buffer = null;
             }
@@ -786,7 +799,7 @@ if (lobMapIndex >= lobMapBlocks.length) {
                 lobMapIndex++;
                 bufferPos = 0;
             } catch (SQLException e) {
-                throw DbException.convertToIOException(e);
+                throw DataUtils.convertToIOException(e);
             }
         }
 

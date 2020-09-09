@@ -23,6 +23,7 @@ import org.h2.mvstore.DataUtils;
 import org.h2.mvstore.FileStore;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
+import org.h2.mvstore.MVStoreException;
 import org.h2.mvstore.OffHeapStore;
 import org.h2.mvstore.type.DataType;
 import org.h2.mvstore.type.ObjectDataType;
@@ -47,7 +48,7 @@ public class TestMVStore extends TestBase {
         TestBase test = TestBase.createCaller().init();
         test.config.traceTest = true;
         test.config.big = true;
-        test.test();
+        test.testFromMain();
     }
 
     @Override
@@ -128,6 +129,7 @@ public class TestMVStore extends TestBase {
             assertEquals("Hello", map.get("1"));
         }
 
+        FileUtils.createDirectories(getTestDir(""));
         String fileName = getBaseDir() + "/" + getTestName();
         FileUtils.delete(fileName);
         try (MVStore store = new MVStore.Builder().
@@ -284,8 +286,8 @@ public class TestMVStore extends TestBase {
             s.commit();
             map.put(1, new byte[10 * 1024]);
             s.commit();
-            MVMap<String, String> meta = s.getMetaMap();
-            Chunk c = Chunk.fromString(meta.get(DataUtils.META_CHUNK + "1"));
+            MVMap<String, String> layout = s.getLayoutMap();
+            Chunk c = Chunk.fromString(layout.get(DataUtils.META_CHUNK + "1"));
             assertTrue(c.maxLen < Integer.MAX_VALUE);
             assertTrue(c.maxLenLive < Integer.MAX_VALUE);
         }
@@ -432,9 +434,9 @@ public class TestMVStore extends TestBase {
                 open();
         s.setRetentionTime(Integer.MAX_VALUE);
         Map<String, Object> header = s.getStoreHeader();
-        assertEquals("1", header.get("format").toString());
-        header.put("formatRead", "1");
-        header.put("format", "2");
+        assertEquals("2", header.get("format").toString());
+        header.put("formatRead", "2");
+        header.put("format", "3");
         forceWriteStoreHeader(s);
         MVMap<Integer, String> m = s.openMap("data");
         forceWriteStoreHeader(s);
@@ -447,9 +449,9 @@ public class TestMVStore extends TestBase {
                     open();
             header = s.getStoreHeader();
             fail(header.toString());
-        } catch (IllegalStateException e) {
+        } catch (MVStoreException e) {
             assertEquals(DataUtils.ERROR_UNSUPPORTED_FORMAT,
-                    DataUtils.getErrorCode(e.getMessage()));
+                    e.getErrorCode());
         }
         s = new MVStore.Builder().
                 encryptionKey("007".toCharArray()).
@@ -480,6 +482,8 @@ public class TestMVStore extends TestBase {
                 fileName(fileName).
                 autoCommitDisabled().
                 open();
+        s.setRetentionTime(0);
+        s.setVersionsToKeep(0);
         MVMap<Integer, String> m;
         for (int i = 0; i < 100; i++) {
             m = s.openMap("data" + i);
@@ -520,11 +524,10 @@ public class TestMVStore extends TestBase {
             Throwable e = exRef.get();
             assertNotNull(e);
             assertEquals(DataUtils.ERROR_WRITING_FAILED,
-                    DataUtils.getErrorCode(e.getMessage()));
-        } catch (IllegalStateException e) {
+                    ((MVStoreException) e).getErrorCode());
+        } catch (MVStoreException e) {
             // sometimes it is detected right away
-            assertEquals(DataUtils.ERROR_CLOSED,
-                    DataUtils.getErrorCode(e.getMessage()));
+            assertEquals(DataUtils.ERROR_CLOSED, e.getErrorCode());
         }
 
         s.closeImmediately();
@@ -699,9 +702,9 @@ public class TestMVStore extends TestBase {
                     fileName(fileName).
                     encryptionKey(passwordChars).open();
             fail();
-        } catch (IllegalStateException e) {
+        } catch (MVStoreException e) {
             assertEquals(DataUtils.ERROR_FILE_CORRUPT,
-                    DataUtils.getErrorCode(e.getMessage()));
+                    e.getErrorCode());
         }
         assertEquals(0, passwordChars[0]);
         assertEquals(0, passwordChars[1]);
@@ -739,16 +742,16 @@ public class TestMVStore extends TestBase {
             m.put(1, 1);
             Map<String, Object> header = s.getStoreHeader();
             int format = Integer.parseInt(header.get("format").toString());
-            assertEquals(1, format);
+            assertEquals(2, format);
             header.put("format", Integer.toString(format + 1));
             forceWriteStoreHeader(s);
         }
         try {
             openStore(fileName).close();
             fail();
-        } catch (IllegalStateException e) {
+        } catch (MVStoreException e) {
             assertEquals(DataUtils.ERROR_UNSUPPORTED_FORMAT,
-                    DataUtils.getErrorCode(e.getMessage()));
+                    e.getErrorCode());
         }
         FileUtils.delete(fileName);
     }
@@ -854,14 +857,14 @@ public class TestMVStore extends TestBase {
                 MVStore s1 = new MVStore.Builder().fileName(fileName).open();
                 s1.close();
                 fail();
-            } catch (IllegalStateException e) {
+            } catch (MVStoreException e) {
                 // expected
             }
             try {
                 MVStore s1 = new MVStore.Builder().fileName(fileName).readOnly().open();
                 s1.close();
                 fail();
-            } catch (IllegalStateException e) {
+            } catch (MVStoreException e) {
                 // expected
             }
             assertFalse(s.getFileStore().isReadOnly());
@@ -878,7 +881,7 @@ public class TestMVStore extends TestBase {
             s.setRetentionTime(Integer.MAX_VALUE);
             long time = System.currentTimeMillis();
             Map<String, Object> m = s.getStoreHeader();
-            assertEquals("1", m.get("format").toString());
+            assertEquals("2", m.get("format").toString());
             long creationTime = (Long) m.get("created");
             assertTrue(Math.abs(time - creationTime) < 100);
             m.put("test", "123");
@@ -1429,7 +1432,7 @@ public class TestMVStore extends TestBase {
             }
             assertEquals(1000, m.size());
             // memory calculations were adjusted, so as this out-of-the-thin-air number
-            assertEquals(93639, s.getUnsavedMemory());
+            assertEquals(93832, s.getUnsavedMemory());
             s.commit();
             assertEquals(2, s.getFileStore().getWriteCount());
         }
@@ -1440,7 +1443,7 @@ public class TestMVStore extends TestBase {
             assertEquals(0, m.size());
             s.commit();
             // ensure only nodes are read, but not leaves
-            assertEquals(6, s.getFileStore().getReadCount());
+            assertEquals(7, s.getFileStore().getReadCount());
             assertTrue(s.getFileStore().getWriteCount() < 5);
         }
     }
@@ -1619,6 +1622,7 @@ public class TestMVStore extends TestBase {
             assertEquals("Hello", data.put("1", "Hallo"));
             s.commit();
             assertEquals("name:data", m.get(DataUtils.META_MAP + id));
+            m = s.getLayoutMap();
             assertTrue(m.get(DataUtils.META_ROOT + id).length() > 0);
             assertTrue(m.containsKey(DataUtils.META_CHUNK + "1"));
 
@@ -1747,12 +1751,12 @@ public class TestMVStore extends TestBase {
             s.setAutoCommitDelay(0);
             s.setRetentionTime(0);
 
-            Map<String, String> meta = s.getMetaMap();
-            int chunkCount1 = getChunkCount(meta);
+            Map<String, String> layout = s.getLayoutMap();
+            int chunkCount1 = getChunkCount(layout);
             s.compact(80, 1);
             s.compact(80, 1);
 
-            int chunkCount2 = getChunkCount(meta);
+            int chunkCount2 = getChunkCount(layout);
             assertTrue(chunkCount2 >= chunkCount1);
 
             MVMap<Integer, String> m = s.openMap("data");
@@ -1766,7 +1770,7 @@ public class TestMVStore extends TestBase {
             }
             assertFalse(s.compact(50, 1024));
 
-            int chunkCount3 = getChunkCount(meta);
+            int chunkCount3 = getChunkCount(layout);
 
             assertTrue(chunkCount1 + ">" + chunkCount2 + ">" + chunkCount3,
                     chunkCount3 < chunkCount1);
@@ -1777,9 +1781,9 @@ public class TestMVStore extends TestBase {
         }
     }
 
-    private static int getChunkCount(Map<String, String> meta) {
+    private static int getChunkCount(Map<String, String> layout) {
         int chunkCount = 0;
-        for (String k : meta.keySet()) {
+        for (String k : layout.keySet()) {
             if (k.startsWith(DataUtils.META_CHUNK)) {
                 chunkCount++;
             }

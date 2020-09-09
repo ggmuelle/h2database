@@ -10,7 +10,7 @@ import org.h2.api.ErrorCode;
 import org.h2.command.CommandInterface;
 import org.h2.command.query.Query;
 import org.h2.engine.Database;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Parameter;
 import org.h2.message.DbException;
 import org.h2.schema.Schema;
@@ -20,7 +20,6 @@ import org.h2.table.TableType;
 import org.h2.table.TableView;
 import org.h2.util.HasSQL;
 import org.h2.value.TypeInfo;
-import org.h2.value.Value;
 
 /**
  * This class represents the statement
@@ -38,7 +37,7 @@ public class CreateView extends SchemaCommand {
     private boolean force;
     private boolean isTableExpression;
 
-    public CreateView(Session session, Schema schema) {
+    public CreateView(SessionLocal session, Schema schema) {
         super(session, schema);
     }
 
@@ -79,7 +78,7 @@ public class CreateView extends SchemaCommand {
     }
 
     @Override
-    public int update() {
+    public long update() {
         session.commit(true);
         session.getUser().checkAdmin();
         Database db = session.getDatabase();
@@ -114,7 +113,7 @@ public class CreateView extends SchemaCommand {
                 // non table expressions are fine to use unknown column type
                 columnTemplatesAsUnknowns[i] = new Column(columnNames[i], TypeInfo.TYPE_UNKNOWN);
                 // table expressions can't have unknown types - so we use string instead
-                columnTemplatesAsStrings[i] = new Column(columnNames[i], Value.VARCHAR);
+                columnTemplatesAsStrings[i] = new Column(columnNames[i], TypeInfo.TYPE_VARCHAR);
             }
         }
         if (view == null) {

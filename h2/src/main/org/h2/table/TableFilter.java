@@ -12,12 +12,11 @@ import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
 import org.h2.api.ErrorCode;
-import org.h2.command.Parser;
 import org.h2.command.query.AllColumnsForPlan;
 import org.h2.command.query.Select;
 import org.h2.engine.Database;
 import org.h2.engine.Right;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.condition.Comparison;
 import org.h2.expression.condition.ConditionAndOr;
@@ -29,11 +28,16 @@ import org.h2.result.Row;
 import org.h2.result.SearchRow;
 import org.h2.result.SortOrder;
 import org.h2.util.HasSQL;
+import org.h2.util.ParserUtil;
 import org.h2.util.StringUtils;
 import org.h2.util.Utils;
+import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 import org.h2.value.ValueBigint;
+import org.h2.value.ValueInteger;
 import org.h2.value.ValueNull;
+import org.h2.value.ValueSmallint;
+import org.h2.value.ValueTinyint;
 
 /**
  * A table filter represents a table that is used in a query. There is one such
@@ -60,7 +64,7 @@ public class TableFilter implements ColumnResolver {
      */
     protected boolean joinOuterIndirect;
 
-    private Session session;
+    private SessionLocal session;
 
     private final Table table;
     private final Select select;
@@ -151,7 +155,7 @@ public class TableFilter implements ColumnResolver {
      * @param orderInFrom original order number (index) of this table filter in
      * @param indexHints the index hints to be used by the query planner
      */
-    public TableFilter(Session session, Table table, String alias,
+    public TableFilter(SessionLocal session, Table table, String alias,
             boolean rightsChecked, Select select, int orderInFrom, IndexHints indexHints) {
         this.session = session;
         this.table = table;
@@ -196,7 +200,7 @@ public class TableFilter implements ColumnResolver {
      * @param exclusive true if an exclusive lock is required
      * @param forceLockEvenInMvcc lock even in the MVCC mode
      */
-    public void lock(Session s, boolean exclusive, boolean forceLockEvenInMvcc) {
+    public void lock(SessionLocal s, boolean exclusive, boolean forceLockEvenInMvcc) {
         table.lock(s, exclusive, forceLockEvenInMvcc);
         if (join != null) {
             join.lock(s, exclusive, forceLockEvenInMvcc);
@@ -213,7 +217,7 @@ public class TableFilter implements ColumnResolver {
      * @param allColumnsSet the set of all columns
      * @return the best plan item
      */
-    public PlanItem getBestPlanItem(Session s, TableFilter[] filters, int filter,
+    public PlanItem getBestPlanItem(SessionLocal s, TableFilter[] filters, int filter,
             AllColumnsForPlan allColumnsSet) {
         PlanItem item1 = null;
         SortOrder sortOrder = null;
@@ -348,10 +352,10 @@ public class TableFilter implements ColumnResolver {
             join.prepare();
         }
         if (filterCondition != null) {
-            filterCondition = filterCondition.optimize(session);
+            filterCondition = filterCondition.optimizeCondition(session);
         }
         if (joinCondition != null) {
-            joinCondition = joinCondition.optimize(session);
+            joinCondition = joinCondition.optimizeCondition(session);
         }
     }
 
@@ -360,7 +364,7 @@ public class TableFilter implements ColumnResolver {
      *
      * @param s the session
      */
-    public void startQuery(Session s) {
+    public void startQuery(SessionLocal s) {
         this.session = s;
         scanCount = 0;
         if (nestedJoin != null) {
@@ -475,6 +479,10 @@ public class TableFilter implements ColumnResolver {
         }
         state = AFTER_LAST;
         return false;
+    }
+
+    public boolean isNullRow() {
+        return state == NULL_ROW;
     }
 
     /**
@@ -640,10 +648,12 @@ public class TableFilter implements ColumnResolver {
      */
     public void createIndexConditions() {
         if (joinCondition != null) {
-            joinCondition = joinCondition.optimize(session);
-            joinCondition.createIndexConditions(session, this);
-            if (nestedJoin != null) {
-                joinCondition.createIndexConditions(session, nestedJoin);
+            joinCondition = joinCondition.optimizeCondition(session);
+            if (joinCondition != null) {
+                joinCondition.createIndexConditions(session, this);
+                if (nestedJoin != null) {
+                    joinCondition.createIndexConditions(session, nestedJoin);
+                }
             }
         }
         if (join != null) {
@@ -722,18 +732,18 @@ public class TableFilter implements ColumnResolver {
             }
             return builder;
         }
-        if (table.isView() && ((TableView) table).isRecursive()) {
+        if (table instanceof TableView && ((TableView) table).isRecursive()) {
             table.getSchema().getSQL(builder, sqlFlags).append('.');
-            Parser.quoteIdentifier(builder, table.getName(), sqlFlags);
+            ParserUtil.quoteIdentifier(builder, table.getName(), sqlFlags);
         } else {
             table.getSQL(builder, sqlFlags);
         }
-        if (table.isView() && ((TableView) table).isInvalid()) {
+        if (table instanceof TableView && ((TableView) table).isInvalid()) {
             throw DbException.get(ErrorCode.VIEW_IS_INVALID_2, table.getName(), "not compiled");
         }
         if (alias != null) {
             builder.append(' ');
-            Parser.quoteIdentifier(builder, alias, sqlFlags);
+            ParserUtil.quoteIdentifier(builder, alias, sqlFlags);
             if (derivedColumnMap != null) {
                 builder.append('(');
                 boolean f = false;
@@ -742,7 +752,7 @@ public class TableFilter implements ColumnResolver {
                         builder.append(", ");
                     }
                     f = true;
-                    Parser.quoteIdentifier(builder, name, sqlFlags);
+                    ParserUtil.quoteIdentifier(builder, name, sqlFlags);
                 }
                 builder.append(')');
             }
@@ -756,7 +766,7 @@ public class TableFilter implements ColumnResolver {
                 } else {
                     first = false;
                 }
-                Parser.quoteIdentifier(builder, index, sqlFlags);
+                ParserUtil.quoteIdentifier(builder, index, sqlFlags);
             }
             builder.append(")");
         }
@@ -791,8 +801,8 @@ public class TableFilter implements ColumnResolver {
         if ((sqlFlags & HasSQL.ADD_PLAN_INFORMATION) != 0) {
             if (filterCondition != null) {
                 builder.append('\n');
-                String condition = StringUtils.unEnclose(filterCondition.getSQL(
-                        HasSQL.TRACE_SQL_FLAGS | HasSQL.ADD_PLAN_INFORMATION));
+                String condition = filterCondition.getSQL(HasSQL.TRACE_SQL_FLAGS | HasSQL.ADD_PLAN_INFORMATION,
+                        Expression.WITHOUT_PARENTHESES);
                 condition = "/* WHERE " + condition + "\n*/";
                 StringUtils.indent(builder, condition, 4, false);
             }
@@ -846,7 +856,7 @@ public class TableFilter implements ColumnResolver {
      *
      * @param session the new session
      */
-    void setSession(Session session) {
+    void setSession(SessionLocal session) {
         this.session = session;
     }
 
@@ -1015,13 +1025,10 @@ public class TableFilter implements ColumnResolver {
         if (!session.getDatabase().getMode().systemColumns) {
             return null;
         }
-        Column[] sys = new Column[3];
-        sys[0] = new Column("oid", Value.INTEGER);
-        sys[0].setTable(table, 0);
-        sys[1] = new Column("ctid", Value.VARCHAR);
-        sys[1].setTable(table, 0);
-        sys[2] = new Column("CTID", Value.VARCHAR);
-        sys[2].setTable(table, 0);
+        Column[] sys = { //
+                new Column("oid", TypeInfo.TYPE_INTEGER, table, 0), //
+                new Column("ctid", TypeInfo.TYPE_VARCHAR, table, 0) //
+        };
         return sys;
     }
 
@@ -1044,12 +1051,31 @@ public class TableFilter implements ColumnResolver {
             if (v != null) {
                 return v;
             }
+            if (columnId == column.getTable().getMainIndexColumn()) {
+                return getDelegatedValue(column);
+            }
             current = cursor.get();
             if (current == null) {
                 return ValueNull.INSTANCE;
             }
         }
         return current.getValue(columnId);
+    }
+
+    private Value getDelegatedValue(Column column) {
+        long key = currentSearchRow.getKey();
+        switch (column.getType().getValueType()) {
+        case Value.TINYINT:
+            return ValueTinyint.get((byte) key);
+        case Value.SMALLINT:
+            return ValueSmallint.get((short) key);
+        case Value.INTEGER:
+            return ValueInteger.get((int) key);
+        case Value.BIGINT:
+            return ValueBigint.get(key);
+        default:
+            throw DbException.throwInternalError();
+        }
     }
 
     @Override
@@ -1209,7 +1235,7 @@ public class TableFilter implements ColumnResolver {
         return evaluatable;
     }
 
-    public Session getSession() {
+    public SessionLocal getSession() {
         return session;
     }
 

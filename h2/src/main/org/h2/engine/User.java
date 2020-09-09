@@ -26,7 +26,7 @@ import org.h2.util.Utils;
 /**
  * Represents a user object.
  */
-public class User extends RightOwner {
+public final class User extends RightOwner {
 
     private final boolean systemUser;
     private byte[] salt;
@@ -236,7 +236,7 @@ public class User extends RightOwner {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         for (Right right : database.getAllRights()) {
             if (right.getGrantee() == this) {
                 database.removeDatabaseObject(session, right);

@@ -28,7 +28,6 @@ import java.time.ZoneOffset;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.H2Type;
-import org.h2.engine.SysProperties;
 import org.h2.test.TestBase;
 import org.h2.test.TestDb;
 
@@ -43,7 +42,7 @@ public class TestUpdatableResultSet extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -72,6 +71,8 @@ public class TestUpdatableResultSet extends TestDb {
         rs = stat.executeQuery("select name from test");
         assertEquals(ResultSet.CONCUR_READ_ONLY, rs.getConcurrency());
         stat.execute("drop table test");
+        rs = stat.executeQuery("SELECT");
+        assertEquals(ResultSet.CONCUR_READ_ONLY, rs.getConcurrency());
 
         stat.execute("create table test(a int, b int, " +
                 "name varchar, primary key(a, b))");
@@ -315,8 +316,7 @@ public class TestUpdatableResultSet extends TestDb {
         assertEquals("java.lang.String", meta.getColumnClassName(++c));
         assertEquals("java.math.BigDecimal", meta.getColumnClassName(++c));
         assertEquals("java.lang.Boolean", meta.getColumnClassName(++c));
-        assertEquals(SysProperties.OLD_RESULT_SET_GET_OBJECT ? "java.lang.Byte" : "java.lang.Integer",
-                meta.getColumnClassName(++c));
+        assertEquals("java.lang.Integer", meta.getColumnClassName(++c));
         assertEquals("[B", meta.getColumnClassName(++c));
         assertEquals("java.sql.Date", meta.getColumnClassName(++c));
         assertEquals("java.sql.Time", meta.getColumnClassName(++c));
@@ -326,8 +326,7 @@ public class TestUpdatableResultSet extends TestDb {
         assertEquals("java.lang.Float", meta.getColumnClassName(++c));
         assertEquals("java.lang.Long", meta.getColumnClassName(++c));
         assertEquals("java.lang.Integer", meta.getColumnClassName(++c));
-        assertEquals(SysProperties.OLD_RESULT_SET_GET_OBJECT ? "java.lang.Short" : "java.lang.Integer",
-                meta.getColumnClassName(++c));
+        assertEquals("java.lang.Integer", meta.getColumnClassName(++c));
         assertEquals("java.sql.Clob", meta.getColumnClassName(++c));
         assertEquals("java.sql.Blob", meta.getColumnClassName(++c));
         rs.moveToInsertRow();

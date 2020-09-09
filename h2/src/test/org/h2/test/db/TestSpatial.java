@@ -19,10 +19,12 @@ import org.h2.test.TestDb;
 import org.h2.tools.SimpleResultSet;
 import org.h2.tools.SimpleRowSource;
 import org.h2.util.HasSQL;
-import org.h2.value.DataType;
+import org.h2.value.TypeInfo;
 import org.h2.value.JTSValueGeometryFactory;
 import org.h2.value.Value;
 import org.h2.value.ValueGeometry;
+import org.h2.value.ValueToObjectConverter;
+import org.h2.value.ValueToObjectConverter2;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
@@ -52,7 +54,7 @@ public class TestSpatial extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -91,7 +93,6 @@ public class TestSpatial extends TestDb {
         testValueConversion();
         testEquals();
         testTableFunctionGeometry();
-        testHashCode();
         testAggregateWithGeometry();
         testTableViewSpatialPredicate();
         testValueGeometryScript();
@@ -122,17 +123,6 @@ public class TestSpatial extends TestDb {
 //        conn.close();
 //        deleteDb("spatial");
 //    }
-
-    private void testHashCode() {
-        ValueGeometry<?> geomA = Value.getGeometryFactory()
-                .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))");
-        ValueGeometry<?> geomB = Value.getGeometryFactory()
-                .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 6,  67 13 6))");
-        ValueGeometry<?> geomC = Value.getGeometryFactory()
-                .get("POLYGON ((67 13 6, 67 18 5, 59 18 4, 59 13 5,  67 13 6))");
-        assertEquals(geomA.hashCode(), geomB.hashCode());
-        assertFalse(geomA.hashCode() == geomC.hashCode());
-    }
 
     private void testSpatialValues() throws SQLException {
         deleteDb("spatial");
@@ -502,8 +492,7 @@ public class TestSpatial extends TestDb {
         deleteDb("spatial");
         try (Connection conn = getConnection(URL)) {
             Statement stat = conn.createStatement();
-            stat.execute("CREATE ALIAS T_GEOM_FROM_TEXT FOR \"" +
-                    TestSpatial.class.getName() + ".geomFromText\"");
+            stat.execute("CREATE ALIAS T_GEOM_FROM_TEXT FOR '" + TestSpatial.class.getName() + ".geomFromText'");
             stat.execute("create table test(id int primary key " +
                     "auto_increment, the_geom geometry)");
             stat.execute("insert into test(the_geom) values(" +
@@ -525,8 +514,8 @@ public class TestSpatial extends TestDb {
         deleteDb("spatial");
         try (Connection conn = getConnection(URL)) {
             Statement stat = conn.createStatement();
-            stat.execute("CREATE ALIAS T_RANDOM_GEOM_TABLE FOR \"" +
-                    TestSpatial.class.getName() + ".getRandomGeometryTable\"");
+            stat.execute("CREATE ALIAS T_RANDOM_GEOM_TABLE FOR '" +
+                    TestSpatial.class.getName() + ".getRandomGeometryTable'");
             stat.execute(
                     "create table test as " +
                     "select * from T_RANDOM_GEOM_TABLE(42,20,-100,100,-100,100,4)");
@@ -606,7 +595,7 @@ public class TestSpatial extends TestDb {
     private void testGeometryDataType() {
         GeometryFactory geometryFactory = new GeometryFactory();
         Geometry geometry = geometryFactory.createPoint(new Coordinate(0, 0));
-        assertEquals(Value.GEOMETRY, DataType.getTypeFromClass(geometry.getClass()));
+        assertEquals(TypeInfo.TYPE_GEOMETRY, ValueToObjectConverter2.classToType(geometry.getClass()));
     }
 
     /**
@@ -662,9 +651,7 @@ public class TestSpatial extends TestDb {
         deleteDb("spatial");
         Connection conn = getConnection(URL);
         Statement stat = conn.createStatement();
-        stat.execute("CREATE ALIAS OBJ_STRING FOR \"" +
-                TestSpatial.class.getName() +
-                ".getObjectString\"");
+        stat.execute("CREATE ALIAS OBJ_STRING FOR '" + TestSpatial.class.getName() + ".getObjectString'");
         ResultSet rs = stat.executeQuery(
                 "select OBJ_STRING('POINT( 15 25 )'::geometry)");
         assertTrue(rs.next());
@@ -714,8 +701,7 @@ public class TestSpatial extends TestDb {
         deleteDb("spatial");
         try (Connection conn = getConnection(URL)) {
             Statement stat = conn.createStatement();
-            stat.execute("CREATE ALIAS POINT_TABLE FOR \"" +
-                    TestSpatial.class.getName() + ".pointTable\"");
+            stat.execute("CREATE ALIAS POINT_TABLE FOR '" + TestSpatial.class.getName() + ".pointTable'");
             stat.execute("create table test as select * from point_table(1, 1)");
             // Read column type
             ResultSet columnMeta = conn.getMetaData().
@@ -724,11 +710,6 @@ public class TestSpatial extends TestDb {
             assertEquals("geometry",
                     columnMeta.getString("TYPE_NAME").toLowerCase());
             assertFalse(columnMeta.next());
-
-            ResultSet rs = stat.executeQuery("select point_table(1, 1)");
-            assertTrue(rs.next());
-            ResultSet rs2 = (ResultSet) rs.getObject(1);
-            assertEquals("GEOMETRY", rs2.getMetaData().getColumnTypeName(1));
         }
         deleteDb("spatial");
     }
@@ -752,8 +733,7 @@ public class TestSpatial extends TestDb {
         deleteDb("spatialIndex");
         try (Connection conn = getConnection("spatialIndex")) {
             Statement st = conn.createStatement();
-            st.execute("CREATE AGGREGATE TABLE_ENVELOPE FOR \""+
-                    TableEnvelope.class.getName()+"\"");
+            st.execute("CREATE AGGREGATE TABLE_ENVELOPE FOR '" + TableEnvelope.class.getName() + '\'');
             st.execute("CREATE TABLE test(the_geom GEOMETRY)");
             st.execute("INSERT INTO test VALUES ('POINT(1 1)'), (null), (null), ('POINT(10 5)')");
             ResultSet rs = st.executeQuery("select TABLE_ENVELOPE(the_geom) from test");
@@ -921,8 +901,9 @@ public class TestSpatial extends TestDb {
         try (Connection conn = getConnection(URL)) {
             Statement stat = conn.createStatement();
             stat.execute("drop table if exists pt_cloud;");
-            stat.execute("CREATE TABLE PT_CLOUD(id serial, the_geom geometry) AS " +
-                "SELECT null, CONCAT('POINT(',A.X,' ',B.X,')')::geometry the_geom " +
+            stat.execute("CREATE TABLE PT_CLOUD(id serial, the_geom geometry)");
+            stat.execute("INSERT INTO PT_CLOUD(the_geom) " +
+                "SELECT 'POINT(' || A.X || ' ' || B.X || ')' " +
                 "from system_range(0,120) A,system_range(0,10) B;");
             stat.execute("create spatial index on pt_cloud(the_geom);");
             try (ResultSet rs = stat.executeQuery(
@@ -1038,7 +1019,7 @@ public class TestSpatial extends TestDb {
                 + "(id identity, the_geom geometry)");
         stat.execute("create spatial index on test(the_geom)");
         for (int i = 0; i < 1000; i++) {
-            stat.execute("insert into test values(null, null)");
+            stat.execute("insert into test(the_geom) values null");
         }
         ResultSet rs = stat.executeQuery("select * from test");
         while (rs.next()) {

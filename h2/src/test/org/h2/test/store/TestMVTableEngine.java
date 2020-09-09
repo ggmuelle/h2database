@@ -49,7 +49,7 @@ public class TestMVTableEngine extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -1179,7 +1179,7 @@ public class TestMVTableEngine extends TestDb {
         rs.next();
         assertEquals(1000, rs.getInt(1));
         assertEquals("", rs.getString(2));
-        assertEquals("", rs.getString(3));
+        assertEquals("          ", rs.getString(3));
         assertFalse(rs.getBoolean(4));
         assertEquals(0, rs.getByte(5));
         assertEquals(0, rs.getShort(6));
@@ -1197,7 +1197,7 @@ public class TestMVTableEngine extends TestDb {
         rs.next();
         assertEquals(1, rs.getInt(1));
         assertEquals("vc", rs.getString(2));
-        assertEquals("ch", rs.getString(3));
+        assertEquals("ch        ", rs.getString(3));
         assertTrue(rs.getBoolean(4));
         assertEquals(8, rs.getByte(5));
         assertEquals(16, rs.getShort(6));
@@ -1216,7 +1216,7 @@ public class TestMVTableEngine extends TestDb {
         assertEquals(-1, rs.getInt(1));
         assertEquals("quite a long string \u1234 \u00ff",
                 rs.getString(2));
-        assertEquals("ch", rs.getString(3));
+        assertEquals("ch        ", rs.getString(3));
         assertFalse(rs.getBoolean(4));
         assertEquals(-8, rs.getByte(5));
         assertEquals(-16, rs.getShort(6));
@@ -1234,7 +1234,7 @@ public class TestMVTableEngine extends TestDb {
         rs.next();
         assertEquals(-1000, rs.getInt(1));
         assertEquals(1000, rs.getString(2).length());
-        assertEquals("ch", rs.getString(3));
+        assertEquals("ch        ", rs.getString(3));
         assertFalse(rs.getBoolean(4));
         assertEquals(-8, rs.getByte(5));
         assertEquals(-16, rs.getShort(6));
@@ -1253,22 +1253,24 @@ public class TestMVTableEngine extends TestDb {
         stat.execute("drop table test");
 
         stat.execute("create table test(id int, obj object, " +
-                "rs result_set, arr array, ig varchar_ignorecase)");
+                "rs row(a int), arr1 int array, arr2 numeric(1000) array, ig varchar_ignorecase)");
         PreparedStatement prep = conn.prepareStatement(
-                "insert into test values(?, ?, ?, ?, ?)");
+                "insert into test values(?, ?, ?, ?, ?, ?)");
         prep.setInt(1, 1);
         prep.setObject(2, new java.lang.AssertionError());
         prep.setObject(3, stat.executeQuery("select 1 from dual"));
         prep.setObject(4, new Object[]{1, 2});
-        prep.setObject(5, "test");
+        prep.setObject(5, new Object[0]);
+        prep.setObject(6, "test");
         prep.execute();
         prep.setInt(1, 1);
         prep.setObject(2, new java.lang.AssertionError());
         prep.setObject(3, stat.executeQuery("select 1 from dual"));
-        prep.setObject(4, new Object[]{
+        prep.setObject(4, new Object[0]);
+        prep.setObject(5, new Object[]{
                 new BigDecimal(new String(
                 new char[1000]).replace((char) 0, '1'))});
-        prep.setObject(5, "test");
+        prep.setObject(6, "test");
         prep.execute();
         if (!config.memory) {
             conn.close();

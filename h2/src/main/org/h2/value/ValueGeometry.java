@@ -7,11 +7,10 @@ package org.h2.value;
 
 import static org.h2.util.geometry.EWKBUtils.EWKB_SRID;
 
-import java.util.Arrays;
-
-import org.h2.mvstore.rtree.SpatialKey;
+import org.h2.mvstore.db.SpatialKey;
 import org.h2.util.Bits;
 import org.h2.util.geometry.EWKBUtils;
+import org.h2.util.geometry.EWKTUtils.EWKTTarget;
 import org.h2.util.geometry.GeometryUtils.EnvelopeTarget;
 //import org.h2.util.geometry.JTSUtils;
 //import org.locationtech.jts.geom.Geometry;
@@ -300,37 +299,14 @@ public abstract class ValueGeometry<T> extends ValueBytesBase {
 
     @Override
     public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
-        if ((sqlFlags & NO_CASTS) == 0) {
-            return super.getSQL(builder.append("CAST("), DEFAULT_SQL_FLAGS).append(" AS GEOMETRY)");
+        builder.append("GEOMETRY ");
+        if ((sqlFlags & ADD_PLAN_INFORMATION) != 0) {
+            EWKBUtils.parseEWKB(value, new EWKTTarget(builder.append('\''), getDimensionSystem()));
+            builder.append('\'');
+        } else {
+            super.getSQL(builder, DEFAULT_SQL_FLAGS);
         }
-        return super.getSQL(builder, DEFAULT_SQL_FLAGS);
-    }
-
-//    @Override
-//    public String getString() {
-//        return EWKTUtils.ewkb2ewkt(value, getDimensionSystem());
-//    }
-
-    @Override
-    public int hashCode() {
-        int h = hash;
-        if (h == 0) {
-            h = getClass().hashCode() ^ Arrays.hashCode(value);
-            if (h == 0) {
-                h = 1_456_791_899;
-            }
-            hash = h;
-        }
-        return h;
-    }
-
-    @Override
-    public Object getObject() {
-//        if (DataType.GEOMETRY_CLASS != null) {
-    	if (ValueGeometry.isGeometryFactoryInitialized()) {
-    		return getGeometry();
-        }
-        return getString();
+        return builder;
     }
 
     @Override

@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import org.h2.api.ErrorCode;
 import org.h2.command.query.Query;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.result.ResultInterface;
 import org.h2.table.ColumnResolver;
@@ -33,7 +33,7 @@ public final class Subquery extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         query.setSession(session);
         try (ResultInterface result = query.query(2)) {
             Value v;
@@ -56,7 +56,7 @@ public final class Subquery extends Expression {
      *            the session
      * @return values in all rows
      */
-    public ArrayList<Value> getAllRows(Session session) {
+    public ArrayList<Value> getAllRows(SessionLocal session) {
         ArrayList<Value> list = new ArrayList<>();
         query.setSession(session);
         try (ResultInterface result = query.query(Integer.MAX_VALUE)) {
@@ -76,7 +76,7 @@ public final class Subquery extends Expression {
 
     @Override
     public TypeInfo getType() {
-        return getExpression().getType();
+        return expression.getType();
     }
 
     @Override
@@ -85,7 +85,7 @@ public final class Subquery extends Expression {
     }
 
     @Override
-    public Expression optimize(Session session) {
+    public Expression optimize(SessionLocal session) {
         query.prepare();
         if (query.isConstantQuery()) {
             return ValueExpression.get(getValue(session));
@@ -93,6 +93,17 @@ public final class Subquery extends Expression {
         Expression e = query.getIfSingleRow();
         if (e != null) {
             return e.optimize(session);
+        }
+        ArrayList<Expression> expressions = query.getExpressions();
+        int columnCount = query.getColumnCount();
+        if (columnCount == 1) {
+            expression = expressions.get(0);
+        } else {
+            Expression[] list = new Expression[columnCount];
+            for (int i = 0; i < columnCount; i++) {
+                list[i] = expressions.get(i);
+            }
+            expression = new ExpressionList(list, false).optimize(session);
         }
         return this;
     }
@@ -103,35 +114,13 @@ public final class Subquery extends Expression {
     }
 
     @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
         return builder.append('(').append(query.getPlanSQL(sqlFlags)).append(')');
     }
 
     @Override
-    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
-        return getSQL(builder, sqlFlags);
-    }
-
-    @Override
-    public void updateAggregate(Session session, int stage) {
+    public void updateAggregate(SessionLocal session, int stage) {
         query.updateAggregate(session, stage);
-    }
-
-    private Expression getExpression() {
-        if (expression == null) {
-            ArrayList<Expression> expressions = query.getExpressions();
-            int columnCount = query.getColumnCount();
-            if (columnCount == 1) {
-                expression = expressions.get(0);
-            } else {
-                Expression[] list = new Expression[columnCount];
-                for (int i = 0; i < columnCount; i++) {
-                    list[i] = expressions.get(i);
-                }
-                expression = new ExpressionList(list, false);
-            }
-        }
-        return expression;
     }
 
     @Override
@@ -153,8 +142,4 @@ public final class Subquery extends Expression {
         return query.isConstantQuery();
     }
 
-    @Override
-    public Expression[] getExpressionColumns(Session session) {
-        return getExpression().getExpressionColumns(session);
-    }
 }

@@ -5,10 +5,7 @@
  */
 package org.h2.value;
 
-import java.util.Arrays;
-
-import org.h2.engine.CastDataProvider;
-import org.h2.mvstore.rtree.SpatialKey;
+import org.h2.mvstore.db.SpatialKey;
 import org.h2.util.geometry.EWKTUtils;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
@@ -27,7 +24,7 @@ public class JTSValueGeometry extends ValueGeometry<Geometry> {
 
 	@Override
 	public Geometry getGeometry() {
-		return (Geometry) getGeometryNoCopy().clone();
+		return (Geometry) getGeometryNoCopy().copy();
 	}
 
 	@Override
@@ -44,18 +41,6 @@ public class JTSValueGeometry extends ValueGeometry<Geometry> {
 		mergedEnvelope.expandToInclude(r.getGeometryNoCopy().getEnvelopeInternal());
 		return getGeometryFactory().getFromGeometry(gf.toGeometry(mergedEnvelope));
 	}
-
-	@Override
-	public boolean equals(Object other) {
-		return other instanceof ValueGeometry
-				&& Arrays.equals(getBytes(), ((JTSValueGeometry) other).getBytes());
-	}
-
-	@Override
-    public int compareTypeSafe(Value v, CompareMode mode, CastDataProvider provider) {
-        Geometry g = ((JTSValueGeometry) v).getGeometryNoCopy();
-        return getGeometryNoCopy().compareTo(g);
-    }
 
 	@Override
     public String getString() {

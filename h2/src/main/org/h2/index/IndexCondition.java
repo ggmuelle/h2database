@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 import org.h2.command.query.Query;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionColumn;
 import org.h2.expression.ExpressionVisitor;
@@ -135,7 +135,7 @@ public class IndexCondition {
      * @param session the session
      * @return the value
      */
-    public Value getCurrentValue(Session session) {
+    public Value getCurrentValue(SessionLocal session) {
         return expression.getValue(session);
     }
 
@@ -146,7 +146,7 @@ public class IndexCondition {
      * @param session the session
      * @return the value list
      */
-    public Value[] getCurrentValueList(Session session) {
+    public Value[] getCurrentValueList(SessionLocal session) {
         TreeSet<Value> valueSet = new TreeSet<>(session.getDatabase().getCompareMode());
         for (Expression e : expressionList) {
             Value v = e.getValue(session);
@@ -203,9 +203,7 @@ public class IndexCondition {
             builder.append(" < ");
             break;
         case Comparison.IN_LIST:
-            builder.append(" IN(");
-            Expression.writeExpressions(builder, expressionList, sqlFlags);
-            builder.append(')');
+            Expression.writeExpressions(builder.append(" IN("), expressionList, sqlFlags).append(')');
             break;
         case Comparison.IN_QUERY:
             builder.append(" IN(");
@@ -219,7 +217,7 @@ public class IndexCondition {
             DbException.throwInternalError("type=" + compareType);
         }
         if (expression != null) {
-            expression.getSQL(builder, sqlFlags);
+            expression.getSQL(builder, sqlFlags, Expression.AUTO_PARENTHESES);
         }
         return builder.toString();
     }

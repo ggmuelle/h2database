@@ -12,7 +12,7 @@ import org.h2.table.Table;
 /**
  * Represents a role. Roles can be granted to users, and to other roles.
  */
-public class Role extends RightOwner {
+public final class Role extends RightOwner {
 
     private final boolean system;
 
@@ -54,7 +54,7 @@ public class Role extends RightOwner {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         for (User user : database.getAllUsers()) {
             Right right = user.getRightForRole(this);
             if (right != null) {

@@ -8,7 +8,7 @@ package org.h2.pagestore.db;
 import java.util.Arrays;
 import org.h2.api.ErrorCode;
 import org.h2.engine.Constants;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.pagestore.Page;
 import org.h2.pagestore.PageStore;
@@ -32,12 +32,10 @@ public class PageBtreeLeaf extends PageBtree {
 
     private static final int OFFSET_LENGTH = 2;
 
-    private final boolean optimizeUpdate;
     private boolean writtenData;
 
     private PageBtreeLeaf(PageBtreeIndex index, int pageId, Data data) {
         super(index, pageId, data);
-        this.optimizeUpdate = index.getDatabase().getSettings().optimizeUpdate;
     }
 
     /**
@@ -137,9 +135,6 @@ public class PageBtreeLeaf extends PageBtree {
             }
         }
         index.getPageStore().logUndo(this, data);
-        if (!optimizeUpdate) {
-            readAllRows();
-        }
         changeCount = index.getPageStore().getChangeCount();
         written = false;
         int x;
@@ -150,7 +145,7 @@ public class PageBtreeLeaf extends PageBtree {
         }
         start += OFFSET_LENGTH;
         int offset = (x == 0 ? pageSize : offsets[x - 1]) - rowLength;
-        if (optimizeUpdate && writtenData) {
+        if (writtenData) {
             if (entryCount > 0) {
                 byte[] d = data.getBytes();
                 int dataStart = offsets[entryCount - 1];
@@ -168,9 +163,6 @@ public class PageBtreeLeaf extends PageBtree {
     }
 
     private void removeRow(int at) {
-        if (!optimizeUpdate) {
-            readAllRows();
-        }
         index.getPageStore().logUndo(this, data);
         entryCount--;
         written = false;
@@ -182,14 +174,11 @@ public class PageBtreeLeaf extends PageBtree {
         int rowLength = startNext - offsets[at];
         start -= OFFSET_LENGTH;
 
-        if (optimizeUpdate) {
-            if (writtenData) {
-                byte[] d = data.getBytes();
-                int dataStart = offsets[entryCount];
-                System.arraycopy(d, dataStart, d,
-                        dataStart + rowLength, offsets[at] - dataStart);
-                Arrays.fill(d, dataStart, dataStart + rowLength, (byte) 0);
-            }
+        if (writtenData) {
+            byte[] d = data.getBytes();
+            int dataStart = offsets[entryCount];
+            System.arraycopy(d, dataStart, d, dataStart + rowLength, offsets[at] - dataStart);
+            Arrays.fill(d, dataStart, dataStart + rowLength, (byte) 0);
         }
 
         offsets = remove(offsets, entryCount + 1, at);
@@ -284,14 +273,11 @@ public class PageBtreeLeaf extends PageBtree {
         if (written) {
             return;
         }
-        if (!optimizeUpdate) {
-            readAllRows();
-        }
         writeHead();
         for (int i = 0; i < entryCount; i++) {
             data.writeShortInt(offsets[i]);
         }
-        if (!writtenData || !optimizeUpdate) {
+        if (!writtenData) {
             for (int i = 0; i < entryCount; i++) {
                 index.writeRow(data, offsets[i], rows[i], onlyPosition);
             }
@@ -360,7 +346,7 @@ public class PageBtreeLeaf extends PageBtree {
     }
 
     @Override
-    public void moveTo(Session session, int newPos) {
+    public void moveTo(SessionLocal session, int newPos) {
         PageStore store = index.getPageStore();
         readAllRows();
         PageBtreeLeaf p2 = PageBtreeLeaf.create(index, newPos, parentPageId);
@@ -387,7 +373,7 @@ public class PageBtreeLeaf extends PageBtree {
         if (!PageBtreeIndex.isMemoryChangeRequired()) {
             return;
         }
-        int memory = Constants.MEMORY_PAGE_BTREE + index.getPageStore().getPageSize();
+        int memory = PageBtree.MEMORY_PAGE_BTREE + index.getPageStore().getPageSize();
         if (rows != null) {
             memory += getEntryCount() * (4 + Constants.MEMORY_POINTER);
             for (int i = 0; i < entryCount; i++) {

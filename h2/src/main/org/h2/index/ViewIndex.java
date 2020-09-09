@@ -14,7 +14,7 @@ import org.h2.command.query.AllColumnsForPlan;
 import org.h2.command.query.Query;
 import org.h2.command.query.SelectUnion;
 import org.h2.engine.Constants;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Parameter;
 import org.h2.expression.condition.Comparison;
 import org.h2.message.DbException;
@@ -34,7 +34,7 @@ import org.h2.value.Value;
  * This object represents a virtual index for a query.
  * Actually it only represents a prepared SELECT statement.
  */
-public class ViewIndex extends BaseIndex implements SpatialIndex {
+public class ViewIndex extends Index implements SpatialIndex {
 
     private static final long MAX_AGE_NANOS =
             TimeUnit.MILLISECONDS.toNanos(Constants.VIEW_COST_CACHE_MAX_AGE);
@@ -45,7 +45,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
     private boolean recursive;
     private final int[] indexMasks;
     private Query query;
-    private final Session createSession;
+    private final SessionLocal createSession;
 
     /**
      * The time in nanoseconds when this index (and its cost) was calculated.
@@ -87,7 +87,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
      * @param filter current filter
      * @param sortOrder sort order
      */
-    public ViewIndex(TableView view, ViewIndex index, Session session,
+    public ViewIndex(TableView view, ViewIndex index, SessionLocal session,
             int[] masks, TableFilter[] filters, int filter, SortOrder sortOrder) {
         super(view, 0, null, null, IndexType.createNonUnique(false));
         this.view = view;
@@ -100,14 +100,18 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
         if (!recursive) {
             query = getQuery(session, masks, filters, filter, sortOrder);
         }
-        // we don't need eviction for recursive views since we can't calculate
-        // their cost if it is a sub-query we don't need eviction as well
-        // because the whole ViewIndex cache is getting dropped in
-        // Session.prepareLocal
-        evaluatedAt = recursive || view.getTopQuery() != null ? Long.MAX_VALUE : System.nanoTime();
+        if (recursive || view.getTopQuery() != null) {
+            evaluatedAt = Long.MAX_VALUE;
+        } else {
+            long time = System.nanoTime();
+            if (time == Long.MAX_VALUE) {
+                time++;
+            }
+            evaluatedAt = time;
+        }
     }
 
-    public Session getSession() {
+    public SessionLocal getSession() {
         return createSession;
     }
 
@@ -123,34 +127,34 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public void close(Session session) {
+    public void close(SessionLocal session) {
         // nothing to do
     }
 
     @Override
-    public void add(Session session, Row row) {
+    public void add(SessionLocal session, Row row) {
         throw DbException.getUnsupportedException("VIEW");
     }
 
     @Override
-    public void remove(Session session, Row row) {
+    public void remove(SessionLocal session, Row row) {
         throw DbException.getUnsupportedException("VIEW");
     }
 
     @Override
-    public double getCost(Session session, int[] masks,
+    public double getCost(SessionLocal session, int[] masks,
             TableFilter[] filters, int filter, SortOrder sortOrder,
             AllColumnsForPlan allColumnsSet) {
         return recursive ? 1000 : query.getCost();
     }
 
     @Override
-    public Cursor find(Session session, SearchRow first, SearchRow last) {
+    public Cursor find(SessionLocal session, SearchRow first, SearchRow last) {
         return find(session, first, last, null);
     }
 
     @Override
-    public Cursor findByGeometry(Session session, SearchRow first, SearchRow last, SearchRow intersection) {
+    public Cursor findByGeometry(SessionLocal session, SearchRow first, SearchRow last, SearchRow intersection) {
         return find(session, first, last, intersection);
     }
 
@@ -217,7 +221,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
      * @param last the upper bound
      * @param intersection the intersection
      */
-    public void setupQueryParameters(Session session, SearchRow first, SearchRow last,
+    public void setupQueryParameters(SessionLocal session, SearchRow first, SearchRow last,
             SearchRow intersection) {
         ArrayList<Parameter> paramList = query.getParameters();
         if (originalParameters != null) {
@@ -255,7 +259,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
         }
     }
 
-    private Cursor find(Session session, SearchRow first, SearchRow last,
+    private Cursor find(SessionLocal session, SearchRow first, SearchRow last,
             SearchRow intersection) {
         if (recursive) {
             return findRecursive(first, last);
@@ -280,7 +284,7 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
         return query;
     }
 
-    private Query getQuery(Session session, int[] masks,
+    private Query getQuery(SessionLocal session, int[] masks,
             TableFilter[] filters, int filter, SortOrder sortOrder) {
         Query q = (Query) session.prepare(querySQL, true, true);
         if (masks == null) {
@@ -371,12 +375,12 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public void remove(Session session) {
+    public void remove(SessionLocal session) {
         throw DbException.getUnsupportedException("VIEW");
     }
 
     @Override
-    public void truncate(Session session) {
+    public void truncate(SessionLocal session) {
         throw DbException.getUnsupportedException("VIEW");
     }
 
@@ -395,17 +399,12 @@ public class ViewIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public long getRowCount(Session session) {
+    public long getRowCount(SessionLocal session) {
         return 0;
     }
 
     @Override
-    public long getRowCountApproximation() {
-        return 0;
-    }
-
-    @Override
-    public long getDiskSpaceUsed() {
+    public long getRowCountApproximation(SessionLocal session) {
         return 0;
     }
 

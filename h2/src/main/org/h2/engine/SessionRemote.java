@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.net.Socket;
 import java.sql.SQLException;
 import java.util.ArrayList;
-
 import org.h2.api.DatabaseEventListener;
 import org.h2.api.ErrorCode;
 import org.h2.api.JavaObjectSerializer;
@@ -19,6 +18,9 @@ import org.h2.command.dml.SetTypes;
 import org.h2.engine.Mode.ModeEnum;
 import org.h2.expression.ParameterInterface;
 import org.h2.jdbc.JdbcException;
+import org.h2.jdbc.meta.DatabaseMeta;
+import org.h2.jdbc.meta.DatabaseMetaLegacy;
+import org.h2.jdbc.meta.DatabaseMetaRemote;
 import org.h2.message.DbException;
 import org.h2.message.Trace;
 import org.h2.message.TraceSystem;
@@ -26,7 +28,6 @@ import org.h2.result.ResultInterface;
 import org.h2.store.DataHandler;
 import org.h2.store.FileStore;
 import org.h2.store.LobStorageFrontend;
-import org.h2.store.LobStorageInterface;
 import org.h2.store.fs.FileUtils;
 import org.h2.util.DateTimeUtils;
 import org.h2.util.JdbcUtils;
@@ -50,7 +51,7 @@ import org.h2.value.ValueVarchar;
  * The client side part of a session when using the server mode. This object
  * communicates with a Session on the server side.
  */
-public class SessionRemote extends SessionWithState implements DataHandler {
+public final class SessionRemote extends Session implements DataHandler {
 
     public static final int SESSION_PREPARE = 0;
     public static final int SESSION_CLOSE = 1;
@@ -71,13 +72,12 @@ public class SessionRemote extends SessionWithState implements DataHandler {
     public static final int SESSION_HAS_PENDING_TRANSACTION = 16;
     public static final int LOB_READ = 17;
     public static final int SESSION_PREPARE_READ_PARAMS2 = 18;
+    public static final int GET_JDBC_META = 19;
 
     public static final int STATUS_ERROR = 0;
     public static final int STATUS_OK = 1;
     public static final int STATUS_CLOSED = 2;
     public static final int STATUS_OK_STATE_CHANGED = 3;
-
-    private static SessionFactory sessionFactory;
 
     private TraceSystem traceSystem;
     private Trace trace;
@@ -93,7 +93,7 @@ public class SessionRemote extends SessionWithState implements DataHandler {
     private int clientVersion;
     private boolean autoReconnect;
     private int lastReconnect;
-    private SessionInterface embedded;
+    private Session embedded;
     private DatabaseEventListener eventListener;
     private LobStorageFrontend lobStorage;
     private boolean cluster;
@@ -145,10 +145,8 @@ public class SessionRemote extends SessionWithState implements DataHandler {
             done(trans);
             clientVersion = trans.readInt();
             trans.setVersion(clientVersion);
-            if (clientVersion >= Constants.TCP_PROTOCOL_VERSION_14) {
-                if (ci.getFileEncryptionKey() != null) {
-                    trans.writeBytes(ci.getFileEncryptionKey());
-                }
+            if (ci.getFileEncryptionKey() != null) {
+                trans.writeBytes(ci.getFileEncryptionKey());
             }
             trans.writeInt(SessionRemote.SESSION_SET_ID);
             trans.writeString(sessionId);
@@ -304,30 +302,18 @@ public class SessionRemote extends SessionWithState implements DataHandler {
         return buff.toString();
     }
 
-    @Override
-    public int getPowerOffCount() {
-        return 0;
-    }
-
-    @Override
-    public void setPowerOffCount(int count) {
-        throw DbException.getUnsupportedException("remote");
-    }
-
     /**
      * Open a new (remote or embedded) session.
      *
      * @param openNew whether to open a new session in any case
      * @return the session
      */
-    public SessionInterface connectEmbeddedOrServer(boolean openNew) {
+    public Session connectEmbeddedOrServer(boolean openNew) {
         ConnectionInfo ci = connectionInfo;
         if (ci.isRemote()) {
             connectServer(ci);
             return this;
         }
-        // create the session using reflection,
-        // so that the JDBC layer can be compiled without it
         boolean autoServerMode = ci.getProperty("AUTO_SERVER", false);
         ConnectionInfo backup = null;
         try {
@@ -338,11 +324,7 @@ public class SessionRemote extends SessionWithState implements DataHandler {
             if (openNew) {
                 ci.setProperty("OPEN_NEW", "true");
             }
-            if (sessionFactory == null) {
-                sessionFactory = (SessionFactory) Class.forName(
-                        "org.h2.engine.Engine").getMethod("getInstance").invoke(null);
-            }
-            return sessionFactory.createSession(ci);
+            return Engine.createSession(ci);
         } catch (Exception re) {
             DbException e = DbException.convert(re);
             if (e.getErrorCode() == ErrorCode.DATABASE_ALREADY_OPEN_1) {
@@ -734,7 +716,7 @@ public class SessionRemote extends SessionWithState implements DataHandler {
     }
 
     @Override
-    public LobStorageInterface getLobStorage() {
+    public LobStorageFrontend getLobStorage() {
         if (lobStorage == null) {
             lobStorage = new LobStorageFrontend(this);
         }
@@ -864,14 +846,16 @@ public class SessionRemote extends SessionWithState implements DataHandler {
     public StaticSettings getStaticSettings() {
         StaticSettings settings = staticSettings;
         if (settings == null) {
-            boolean databaseToUpper = true, databaseToLower = false, caseInsensitiveIdentifiers = false;
+            boolean databaseToUpper = true, databaseToLower = false, caseInsensitiveIdentifiers = false,
+                    oldInformationSchema = false;
             try (CommandInterface command = prepareCommand(
-                    "SELECT NAME, `VALUE` FROM INFORMATION_SCHEMA.SETTINGS WHERE NAME IN (?, ?, ?)",
+                    "SELECT NAME, `VALUE` FROM INFORMATION_SCHEMA.SETTINGS WHERE NAME IN (?, ?, ?, ?)",
                     Integer.MAX_VALUE)) {
                 ArrayList<? extends ParameterInterface> parameters = command.getParameters();
                 parameters.get(0).setValue(ValueVarchar.get("DATABASE_TO_UPPER"), false);
                 parameters.get(1).setValue(ValueVarchar.get("DATABASE_TO_LOWER"), false);
                 parameters.get(2).setValue(ValueVarchar.get("CASE_INSENSITIVE_IDENTIFIERS"), false);
+                parameters.get(3).setValue(ValueVarchar.get("OLD_INFORMATION_SCHEMA"), false);
                 try (ResultInterface result = command.executeQuery(Integer.MAX_VALUE, false)) {
                     while (result.next()) {
                         Value[] row = result.currentRow();
@@ -885,6 +869,9 @@ public class SessionRemote extends SessionWithState implements DataHandler {
                             break;
                         case "CASE_INSENSITIVE_IDENTIFIERS":
                             caseInsensitiveIdentifiers = Boolean.valueOf(value);
+                            break;
+                        case "OLD_INFORMATION_SCHEMA":
+                            oldInformationSchema = Boolean.valueOf(value);
                         }
                     }
                 }
@@ -893,7 +880,7 @@ public class SessionRemote extends SessionWithState implements DataHandler {
                 caseInsensitiveIdentifiers = !databaseToUpper;
             }
             staticSettings = settings = new StaticSettings(databaseToUpper, databaseToLower,
-                    caseInsensitiveIdentifiers);
+                    caseInsensitiveIdentifiers, oldInformationSchema);
         }
         return settings;
     }
@@ -963,6 +950,17 @@ public class SessionRemote extends SessionWithState implements DataHandler {
     @Override
     public Mode getMode() {
         return getDynamicSettings().mode;
+    }
+
+    @Override
+    public DatabaseMeta getDatabaseMeta() {
+        return clientVersion >= Constants.TCP_PROTOCOL_VERSION_20 ? new DatabaseMetaRemote(this, transferList)
+                : new DatabaseMetaLegacy(this);
+    }
+
+    @Override
+    public boolean zeroBasedEnums() {
+        return false;
     }
 
 }

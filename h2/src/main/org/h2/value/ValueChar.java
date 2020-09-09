@@ -5,37 +5,27 @@
  */
 package org.h2.value;
 
+import org.h2.engine.CastDataProvider;
 import org.h2.engine.SysProperties;
 import org.h2.util.StringUtils;
 
 /**
- * Implementation of the CHAR data type.
+ * Implementation of the CHARACTER data type.
  */
 public final class ValueChar extends ValueStringBase {
-
-    private static final ValueChar EMPTY = new ValueChar("");
 
     private ValueChar(String value) {
         super(value);
     }
 
-    private static String trimRight(String s) {
-        return trimRight(s, 0);
-    }
-
-    private static String trimRight(String s, int minLength) {
-        int endIndex = s.length() - 1;
-        int i = endIndex;
-        while (i >= minLength && s.charAt(i) == ' ') {
-            i--;
-        }
-        s = i == endIndex ? s : s.substring(0, i + 1);
-        return s;
-    }
-
     @Override
     public int getValueType() {
         return CHAR;
+    }
+
+    @Override
+    public int compareTypeSafe(Value v, CompareMode mode, CastDataProvider provider) {
+        return mode.compareString(convertToChar().getString(), v.convertToChar().getString(), false);
     }
 
     @Override
@@ -50,19 +40,13 @@ public final class ValueChar extends ValueStringBase {
 
     /**
      * Get or create a CHAR value for the given string.
-     * Spaces at the end of the string will be removed.
      *
      * @param s the string
      * @return the value
      */
     public static ValueChar get(String s) {
-        s = trimRight(s);
-        int length = s.length();
-        if (length == 0) {
-            return EMPTY;
-        }
         ValueChar obj = new ValueChar(StringUtils.cache(s));
-        if (length > SysProperties.OBJECT_CACHE_MAX_PER_ELEMENT_SIZE) {
+        if (s.length() > SysProperties.OBJECT_CACHE_MAX_PER_ELEMENT_SIZE) {
             return obj;
         }
         return (ValueChar) Value.cache(obj);

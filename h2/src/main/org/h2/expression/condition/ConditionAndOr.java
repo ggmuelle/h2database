@@ -5,9 +5,10 @@
  */
 package org.h2.expression.condition;
 
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionVisitor;
+import org.h2.expression.TypedValueExpression;
 import org.h2.expression.ValueExpression;
 import org.h2.message.DbException;
 import org.h2.table.ColumnResolver;
@@ -48,10 +49,18 @@ public class ConditionAndOr extends Condition {
         this.right = right;
     }
 
+    int getAndOrType() {
+        return this.andOrType;
+    }
+
     @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
-        builder.append('(');
-        left.getSQL(builder, sqlFlags);
+    public boolean needParentheses() {
+        return true;
+    }
+
+    @Override
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
+        left.getSQL(builder, sqlFlags, AUTO_PARENTHESES);
         switch (andOrType) {
         case AND:
             builder.append("\n    AND ");
@@ -62,11 +71,11 @@ public class ConditionAndOr extends Condition {
         default:
             throw DbException.throwInternalError("andOrType=" + andOrType);
         }
-        return right.getSQL(builder, sqlFlags).append(')');
+        return right.getSQL(builder, sqlFlags, AUTO_PARENTHESES);
     }
 
     @Override
-    public void createIndexConditions(Session session, TableFilter filter) {
+    public void createIndexConditions(SessionLocal session, TableFilter filter) {
         if (andOrType == AND) {
             left.createIndexConditions(session, filter);
             right.createIndexConditions(session, filter);
@@ -77,7 +86,7 @@ public class ConditionAndOr extends Condition {
     }
 
     @Override
-    public Expression getNotIfPossible(Session session) {
+    public Expression getNotIfPossible(SessionLocal session) {
         // (NOT (A OR B)): (NOT(A) AND NOT(B))
         // (NOT (A AND B)): (NOT(A) OR NOT(B))
         Expression l = left.getNotIfPossible(session);
@@ -93,7 +102,7 @@ public class ConditionAndOr extends Condition {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         Value l = left.getValue(session);
         Value r;
         switch (andOrType) {
@@ -129,7 +138,7 @@ public class ConditionAndOr extends Condition {
     }
 
     @Override
-    public Expression optimize(Session session) {
+    public Expression optimize(SessionLocal session) {
         // NULL handling: see wikipedia,
         // http://www-cs-students.stanford.edu/~wlam/compsci/sqlnulls
         left = left.optimize(session);
@@ -185,64 +194,100 @@ public class ConditionAndOr extends Condition {
                 return reduced.optimize(session);
             }
         }
-        return optimizeConstant(session, this, andOrType, left, right);
+        Expression e = optimizeIfConstant(session, andOrType, left, right);
+        if (e == null) {
+            return optimizeN(session, this);
+        }
+        if (e instanceof ConditionAndOr) {
+            return optimizeN(session, (ConditionAndOr) e);
+        }
+        return e;
+    }
+
+    private static Expression optimizeN(SessionLocal session, ConditionAndOr condition) {
+        if (condition.right instanceof ConditionAndOr) {
+            ConditionAndOr rightCondition = (ConditionAndOr) condition.right;
+            if (rightCondition.andOrType == condition.andOrType) {
+                return new ConditionAndOrN(condition.andOrType, condition.left, rightCondition.left,
+                        rightCondition.right);
+            }
+        }
+        if (condition.right instanceof ConditionAndOrN) {
+            ConditionAndOrN rightCondition = (ConditionAndOrN) condition.right;
+            if (rightCondition.getAndOrType() == condition.andOrType) {
+                rightCondition.addFirst(condition.left);
+                return rightCondition;
+            }
+        }
+        return condition;
     }
 
     /**
-     * Optimize the expression if at least one part is constant.
+     * Optimize the condition if at least one part is constant.
      *
      * @param session the session
-     * @param condition the condition
      * @param andOrType the type
      * @param left the left part of the condition
      * @param right the right part of the condition
-     * @return the optimized expression
+     * @return the optimized condition, or {@code null} if condition cannot be optimized
      */
-    static Expression optimizeConstant(Session session, Expression condition, int andOrType, Expression left,
-            Expression right) {
-        Value l = left.isConstant() ? left.getValue(session) : null;
-        Value r = right.isConstant() ? right.getValue(session) : null;
-        if (l == null && r == null) {
-            return condition;
+    static Expression optimizeIfConstant(SessionLocal session, int andOrType, Expression left, Expression right) {
+        if (!left.isConstant()) {
+            if (!right.isConstant()) {
+                return null;
+            } else {
+                return optimizeConstant(session, andOrType, right.getValue(session), left);
+            }
         }
-        if (l != null && r != null) {
-            return ValueExpression.getBoolean(condition.getValue(session));
+        Value l = left.getValue(session);
+        if (!right.isConstant()) {
+            return optimizeConstant(session, andOrType, l, right);
         }
+        Value r = right.getValue(session);
+        switch (andOrType) {
+        case AND: {
+            if (l != ValueNull.INSTANCE && !l.getBoolean() || r != ValueNull.INSTANCE && !r.getBoolean()) {
+                return ValueExpression.FALSE;
+            }
+            if (l == ValueNull.INSTANCE || r == ValueNull.INSTANCE) {
+                return TypedValueExpression.UNKNOWN;
+            }
+            return ValueExpression.TRUE;
+        }
+        case OR: {
+            if (l.getBoolean() || r.getBoolean()) {
+                return ValueExpression.TRUE;
+            }
+            if (l == ValueNull.INSTANCE || r == ValueNull.INSTANCE) {
+                return TypedValueExpression.UNKNOWN;
+            }
+            return ValueExpression.FALSE;
+        }
+        default:
+            throw DbException.throwInternalError("type=" + andOrType);
+        }
+    }
+
+    private static Expression optimizeConstant(SessionLocal session, int andOrType, Value l, Expression right) {
         switch (andOrType) {
         case AND:
-            if (l != null) {
-                if (l != ValueNull.INSTANCE && !l.getBoolean()) {
-                    return ValueExpression.FALSE;
-                } else if (l.getBoolean()) {
-                    return castToBoolean(session, right);
-                }
-            } else if (r != null) {
-                if (r != ValueNull.INSTANCE && !r.getBoolean()) {
-                    return ValueExpression.FALSE;
-                } else if (r.getBoolean()) {
-                    return castToBoolean(session, left);
-                }
+            if (l != ValueNull.INSTANCE && !l.getBoolean()) {
+                return ValueExpression.FALSE;
+            } else if (l.getBoolean()) {
+                return castToBoolean(session, right);
             }
             break;
         case OR:
-            if (l != null) {
-                if (l.getBoolean()) {
-                    return ValueExpression.TRUE;
-                } else if (l != ValueNull.INSTANCE) {
-                    return castToBoolean(session, right);
-                }
-            } else if (r != null) {
-                if (r.getBoolean()) {
-                    return ValueExpression.TRUE;
-                } else if (r != ValueNull.INSTANCE) {
-                    return castToBoolean(session, left);
-                }
+            if (l.getBoolean()) {
+                return ValueExpression.TRUE;
+            } else if (l != ValueNull.INSTANCE) {
+                return castToBoolean(session, right);
             }
             break;
         default:
-            DbException.throwInternalError("type=" + andOrType);
+            throw DbException.throwInternalError("type=" + andOrType);
         }
-        return condition;
+        return null;
     }
 
     @Override
@@ -268,7 +313,7 @@ public class ConditionAndOr extends Condition {
     }
 
     @Override
-    public void updateAggregate(Session session, int stage) {
+    public void updateAggregate(SessionLocal session, int stage) {
         left.updateAggregate(session, stage);
         right.updateAggregate(session, stage);
     }
@@ -308,7 +353,7 @@ public class ConditionAndOr extends Condition {
      * @param right the second condition
      * @return null or the third condition
      */
-    private static Expression optimizeConditionAndOr(ConditionAndOr left, ConditionAndOr right) {
+    static Expression optimizeConditionAndOr(ConditionAndOr left, ConditionAndOr right) {
         if (left.andOrType != AND || right.andOrType != AND) {
             return null;
         }

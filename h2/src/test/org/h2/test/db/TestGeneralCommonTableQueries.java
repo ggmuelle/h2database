@@ -24,7 +24,7 @@ public class TestGeneralCommonTableQueries extends AbstractBaseForCommonTableExp
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -237,7 +237,7 @@ public class TestGeneralCommonTableQueries extends AbstractBaseForCommonTableExp
                     "- but should not have been.");
         } catch (SQLException e) {
             // ensure the T1 table has been removed even without auto commit
-            assertContains(e.getMessage(), "Table \"T1\" not found;");
+            assertContains(e.getMessage(), "Table \"T1\" not found (this database is empty);");
         }
 
         conn.close();

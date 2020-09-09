@@ -276,6 +276,30 @@ public class DbException extends RuntimeException {
     }
 
     /**
+     * Gets a SQL exception meaning this value is too long.
+     *
+     * @param columnOrType
+     *            column with data type or data type name
+     * @param value
+     *            string representation of value, will be truncated to 80
+     *            characters
+     * @param valueLength
+     *            the actual length of value, {@code -1L} if unknown
+     * @return the exception
+     */
+    public static DbException getValueTooLongException(String columnOrType, String value, long valueLength) {
+        int length = value.length();
+        int m = valueLength >= 0 ? 22 : 0;
+        StringBuilder builder = length > 80 //
+                ? new StringBuilder(83 + m).append(value, 0, 80).append("...")
+                : new StringBuilder(length + m).append(value);
+        if (valueLength >= 0) {
+            builder.append(" (").append(valueLength).append(')');
+        }
+        return get(VALUE_TOO_LONG_2, columnOrType, builder.toString());
+    }
+
+    /**
      * Gets a file version exception.
      *
      * @param dataFileName the name of the database
@@ -456,6 +480,7 @@ public class DbException extends RuntimeException {
         case 7:
         case 21:
         case 42:
+        case 54:
             return new JdbcSQLSyntaxErrorException(message, sql, state, errorCode, cause, stackTrace);
         case 8:
             return new JdbcSQLNonTransientConnectionException(message, sql, state, errorCode, cause, stackTrace);
@@ -562,7 +587,7 @@ public class DbException extends RuntimeException {
         case CANNOT_TRUNCATE_1:
         case CANNOT_DROP_2:
         case VIEW_IS_INVALID_2:
-        case COMPARING_ARRAY_TO_SCALAR:
+        case TYPES_ARE_NOT_COMPARABLE_2:
         case CONSTANT_ALREADY_EXISTS_1:
         case CONSTANT_NOT_FOUND_1:
         case LITERALS_ARE_NOT_ALLOWED:
@@ -589,7 +614,7 @@ public class DbException extends RuntimeException {
         case HEX_STRING_ODD_1:
         case HEX_STRING_WRONG_1:
         case INVALID_VALUE_2:
-        case SEQUENCE_ATTRIBUTES_INVALID_6:
+        case SEQUENCE_ATTRIBUTES_INVALID_7:
         case INVALID_TO_CHAR_FORMAT:
         case PARAMETER_NOT_SET_1:
         case PARSE_ERROR_1:
@@ -643,24 +668,6 @@ public class DbException extends RuntimeException {
 
     private static String filterSQL(String sql) {
         return sql == null || !sql.contains(HIDE_SQL) ? sql : "-";
-    }
-
-    /**
-     * Convert an exception to an IO exception.
-     *
-     * @param e the root cause
-     * @return the IO exception
-     */
-    public static IOException convertToIOException(Throwable e) {
-        if (e instanceof IOException) {
-            return (IOException) e;
-        }
-        if (e instanceof JdbcException) {
-            if (e.getCause() != null) {
-                e = e.getCause();
-            }
-        }
-        return new IOException(e.toString(), e);
     }
 
     /**

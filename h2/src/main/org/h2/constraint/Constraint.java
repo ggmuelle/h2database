@@ -7,22 +7,21 @@ package org.h2.constraint;
 
 import java.util.HashSet;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionVisitor;
 import org.h2.index.Index;
 import org.h2.message.Trace;
 import org.h2.result.Row;
 import org.h2.schema.Schema;
-import org.h2.schema.SchemaObjectBase;
+import org.h2.schema.SchemaObject;
 import org.h2.table.Column;
 import org.h2.table.Table;
 
 /**
  * The base class for constraint checking.
  */
-public abstract class Constraint extends SchemaObjectBase implements
-        Comparable<Constraint> {
+public abstract class Constraint extends SchemaObject implements Comparable<Constraint> {
 
     public enum Type {
         /**
@@ -92,7 +91,7 @@ public abstract class Constraint extends SchemaObjectBase implements
      * @param oldRow the old row
      * @param newRow the new row
      */
-    public abstract void checkRow(Session session, Table t, Row oldRow, Row newRow);
+    public abstract void checkRow(SessionLocal session, Table t, Row oldRow, Row newRow);
 
     /**
      * Check if this constraint needs the specified index.
@@ -146,7 +145,7 @@ public abstract class Constraint extends SchemaObjectBase implements
      *
      * @param session the session
      */
-    public abstract void checkExistingData(Session session);
+    public abstract void checkExistingData(SessionLocal session);
 
     /**
      * This method is called after a related table has changed

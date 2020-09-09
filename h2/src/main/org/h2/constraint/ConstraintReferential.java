@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import org.h2.api.ErrorCode;
 import org.h2.command.Prepared;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.Parameter;
 import org.h2.index.Cursor;
@@ -220,7 +220,7 @@ public class ConstraintReferential extends Constraint {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         table.removeConstraint(this);
         refTable.removeConstraint(this);
         if (indexOwner) {
@@ -239,7 +239,7 @@ public class ConstraintReferential extends Constraint {
     }
 
     @Override
-    public void checkRow(Session session, Table t, Row oldRow, Row newRow) {
+    public void checkRow(SessionLocal session, Table t, Row oldRow, Row newRow) {
         if (!database.getReferentialIntegrity()) {
             return;
         }
@@ -257,7 +257,7 @@ public class ConstraintReferential extends Constraint {
         }
     }
 
-    private void checkRowOwnTable(Session session, Row oldRow, Row newRow) {
+    private void checkRowOwnTable(SessionLocal session, Row oldRow, Row newRow) {
         if (newRow == null) {
             return;
         }
@@ -313,7 +313,7 @@ public class ConstraintReferential extends Constraint {
         }
     }
 
-    private boolean existsRow(Session session, Index searchIndex,
+    private boolean existsRow(SessionLocal session, Index searchIndex,
             SearchRow check, Row excluding) {
         Table searchTable = searchIndex.getTable();
         searchTable.lock(session, false, false);
@@ -347,7 +347,7 @@ public class ConstraintReferential extends Constraint {
         return refConstraint.getIndex().compareRows(oldRow, newRow) == 0;
     }
 
-    private void checkRow(Session session, Row oldRow) {
+    private void checkRow(SessionLocal session, Row oldRow) {
         SearchRow check = table.getRowFactory().createRow();
         for (int i = 0, len = columns.length; i < len; i++) {
             Column refCol = refColumns[i].column;
@@ -367,7 +367,7 @@ public class ConstraintReferential extends Constraint {
         }
     }
 
-    private void checkRowRefTable(Session session, Row oldRow, Row newRow) {
+    private void checkRowRefTable(SessionLocal session, Row oldRow, Row newRow) {
         if (oldRow == null) {
             // this is an insert
             return;
@@ -478,11 +478,11 @@ public class ConstraintReferential extends Constraint {
         deleteSQL = builder.toString();
     }
 
-    private Prepared getUpdate(Session session) {
+    private Prepared getUpdate(SessionLocal session) {
         return prepare(session, updateSQL, updateAction);
     }
 
-    private Prepared getDelete(Session session) {
+    private Prepared getDelete(SessionLocal session) {
         return prepare(session, deleteSQL, deleteAction);
     }
 
@@ -522,7 +522,7 @@ public class ConstraintReferential extends Constraint {
         buildDeleteSQL();
     }
 
-    private Prepared prepare(Session session, String sql, ConstraintActionType action) {
+    private Prepared prepare(SessionLocal session, String sql, ConstraintActionType action) {
         Prepared command = session.prepare(sql);
         if (action != ConstraintActionType.CASCADE) {
             ArrayList<Parameter> params = command.getParameters();
@@ -533,7 +533,7 @@ public class ConstraintReferential extends Constraint {
                 if (action == ConstraintActionType.SET_NULL) {
                     value = ValueNull.INSTANCE;
                 } else {
-                    Expression expr = column.getDefaultExpression();
+                    Expression expr = column.getEffectiveDefaultExpression();
                     if (expr == null) {
                         throw DbException.get(ErrorCode.NO_DEFAULT_SET_1, column.getName());
                     }
@@ -548,22 +548,12 @@ public class ConstraintReferential extends Constraint {
     private void appendUpdate(StringBuilder builder) {
         builder.append("UPDATE ");
         table.getSQL(builder, DEFAULT_SQL_FLAGS).append(" SET ");
-        for (int i = 0, l = columns.length; i < l; i++) {
-            if (i > 0) {
-                builder.append(", ");
-            }
-            columns[i].column.getSQL(builder, DEFAULT_SQL_FLAGS).append("=?");
-        }
+        IndexColumn.writeColumns(builder, columns, ", ", "=?", IndexColumn.SQL_NO_ORDER);
     }
 
     private void appendWhere(StringBuilder builder) {
         builder.append(" WHERE ");
-        for (int i = 0, l = columns.length; i < l; i++) {
-            if (i > 0) {
-                builder.append(" AND ");
-            }
-            columns[i].column.getSQL(builder, DEFAULT_SQL_FLAGS).append("=?");
-        }
+        IndexColumn.writeColumns(builder, columns, " AND ", "=?", IndexColumn.SQL_NO_ORDER);
     }
 
     @Override
@@ -573,7 +563,7 @@ public class ConstraintReferential extends Constraint {
 
     @Override
     public boolean usesIndex(Index idx) {
-        return idx == index || idx == refConstraint;
+        return idx == index;
     }
 
     @Override
@@ -591,16 +581,16 @@ public class ConstraintReferential extends Constraint {
     }
 
     @Override
-    public void checkExistingData(Session session) {
+    public void checkExistingData(SessionLocal session) {
         if (session.getDatabase().isStarting()) {
             // don't check at startup
             return;
         }
         StringBuilder builder = new StringBuilder("SELECT 1 FROM (SELECT ");
-        IndexColumn.writeColumns(builder, columns, DEFAULT_SQL_FLAGS);
+        IndexColumn.writeColumns(builder, columns, IndexColumn.SQL_NO_ORDER);
         builder.append(" FROM ");
         table.getSQL(builder, DEFAULT_SQL_FLAGS).append(" WHERE ");
-        IndexColumn.writeColumns(builder, columns, " AND ", " IS NOT NULL ", DEFAULT_SQL_FLAGS);
+        IndexColumn.writeColumns(builder, columns, " AND ", " IS NOT NULL ", IndexColumn.SQL_NO_ORDER);
         builder.append(" ORDER BY ");
         IndexColumn.writeColumns(builder, columns, DEFAULT_SQL_FLAGS);
         builder.append(") C WHERE NOT EXISTS(SELECT 1 FROM ");
@@ -610,8 +600,8 @@ public class ConstraintReferential extends Constraint {
                 builder.append(" AND ");
             }
             builder.append("C.");
-            columns[i].getSQL(builder, DEFAULT_SQL_FLAGS).append('=').append("P.");
-            refColumns[i].getSQL(builder, DEFAULT_SQL_FLAGS);
+            columns[i].column.getSQL(builder, DEFAULT_SQL_FLAGS).append('=').append("P.");
+            refColumns[i].column.getSQL(builder, DEFAULT_SQL_FLAGS);
         }
         builder.append(')');
 

@@ -5,23 +5,21 @@
  */
 package org.h2.expression;
 
-import org.h2.command.Parser;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
-import org.h2.table.ColumnResolver;
-import org.h2.table.TableFilter;
+import org.h2.util.ParserUtil;
 import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
  * A user-defined variable, for example: @ID.
  */
-public class Variable extends Expression {
+public final class Variable extends Operation0 {
 
     private final String name;
     private Value lastValue;
 
-    public Variable(Session session, String name) {
+    public Variable(SessionLocal session, String name) {
         this.name = name;
         lastValue = session.getVariable(name);
     }
@@ -32,9 +30,8 @@ public class Variable extends Expression {
     }
 
     @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
-        builder.append('@');
-        return Parser.quoteIdentifier(builder, name, sqlFlags);
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
+        return ParserUtil.quoteIdentifier(builder.append('@'), name, sqlFlags);
     }
 
     @Override
@@ -43,7 +40,7 @@ public class Variable extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         lastValue = session.getVariable(name);
         return lastValue;
     }
@@ -70,26 +67,6 @@ public class Variable extends Expression {
         default:
             throw DbException.throwInternalError("type="+visitor.getType());
         }
-    }
-
-    @Override
-    public void mapColumns(ColumnResolver resolver, int level, int state) {
-        // nothing to do
-    }
-
-    @Override
-    public Expression optimize(Session session) {
-        return this;
-    }
-
-    @Override
-    public void setEvaluatable(TableFilter tableFilter, boolean value) {
-        // nothing to do
-    }
-
-    @Override
-    public void updateAggregate(Session session, int stage) {
-        // nothing to do
     }
 
     public String getName() {

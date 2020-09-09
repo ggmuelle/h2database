@@ -5,14 +5,20 @@
  */
 package org.h2.test.db;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.Collections;
+
 import org.h2.api.ErrorCode;
 import org.h2.api.Trigger;
+import org.h2.engine.Constants;
 import org.h2.store.fs.FileUtils;
 import org.h2.test.TestBase;
 import org.h2.test.TestDb;
@@ -31,14 +37,13 @@ public class TestRunscript extends TestDb implements Trigger {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
         org.h2.test.TestAll config = new org.h2.test.TestAll();
         config.traceLevelFile = 1;
-        config.defrag = true;
         System.out.println(config);
         TestBase test = createCaller();
         test.runTest(config);
-//        TestBase.createCaller().init().test();
+//        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -59,6 +64,7 @@ public class TestRunscript extends TestDb implements Trigger {
         testCancelScript();
         testEncoding();
         testClobPrimaryKey();
+        testTruncateLargeLength();
         testVariableBinary();
         deleteDb("runscript");
     }
@@ -68,7 +74,7 @@ public class TestRunscript extends TestDb implements Trigger {
         Connection conn;
         conn = getConnection("runscript");
         Statement stat = conn.createStatement();
-        stat.execute("create alias int_decode for \"java.lang.Integer.decode\"");
+        stat.execute("create alias int_decode for 'java.lang.Integer.decode'");
         stat.execute("create table test(x varchar, y int as int_decode(x))");
         stat.execute("script simple drop to '" +
                 getBaseDir() + "/backup.sql'");
@@ -167,7 +173,7 @@ public class TestRunscript extends TestDb implements Trigger {
         stat.execute("create schema a");
         stat.execute("create schema b");
         stat.execute("create schema c");
-        stat.execute("create alias a.int_decode for \"java.lang.Integer.decode\"");
+        stat.execute("create alias a.int_decode for 'java.lang.Integer.decode'");
         stat.execute("create table a.test(x varchar, y int as a.int_decode(x))");
         stat.execute("script schema b");
         rs = stat.getResultSet();
@@ -450,8 +456,7 @@ public class TestRunscript extends TestDb implements Trigger {
         stat1.execute("create table test2(id int primary key) as " +
                 "select x from system_range(1, 5000)");
         stat1.execute("create sequence testSeq start with 100 increment by 10");
-        stat1.execute("create alias myTest for \"" +
-                getClass().getName() + ".test\"");
+        stat1.execute("create alias myTest for '" + getClass().getName() + ".test'");
         stat1.execute("create trigger myTrigger before insert " +
                 "on test nowait call \"" + getClass().getName() + "\"");
         stat1.execute("create view testView as select * " +
@@ -543,7 +548,26 @@ public class TestRunscript extends TestDb implements Trigger {
         deleteDb("runscriptRestoreRecover");
         FileUtils.delete(getBaseDir() + "/backup.2.sql");
         FileUtils.delete(getBaseDir() + "/backup.3.sql");
+        FileUtils.delete(getBaseDir() + "/runscript.h2.sql");
 
+    }
+
+    private void testTruncateLargeLength() throws Exception {
+        deleteDb("runscript");
+        Connection conn;
+        Statement stat;
+        Files.write(Paths.get(getBaseDir() + "/backup.sql"),
+                Collections.singleton("CREATE TABLE TEST(V VARCHAR(2147483647))"), //
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        conn = getConnection("runscript");
+        stat = conn.createStatement();
+        assertThrows(ErrorCode.INVALID_VALUE_PRECISION, stat)
+                .execute("RUNSCRIPT FROM '" + getBaseDir() + "/backup.sql'");
+        stat.execute("RUNSCRIPT FROM '" + getBaseDir() + "/backup.sql' TRUNCATE_LARGE_LENGTH");
+        assertEquals(Constants.MAX_STRING_LENGTH, stat.executeQuery("TABLE TEST").getMetaData().getPrecision(1));
+        conn.close();
+        deleteDb("runscript");
+        FileUtils.delete(getBaseDir() + "/backup.sql");
     }
 
     private void testVariableBinary() throws SQLException {

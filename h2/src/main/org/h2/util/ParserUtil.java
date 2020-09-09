@@ -40,9 +40,14 @@ public class ParserUtil {
     public static final int AS = ARRAY + 1;
 
     /**
+     * The token "ASYMMETRIC".
+     */
+    public static final int ASYMMETRIC = AS + 1;
+
+    /**
      * The token "BETWEEN".
      */
-    public static final int BETWEEN = AS + 1;
+    public static final int BETWEEN = ASYMMETRIC + 1;
 
     /**
      * The token "CASE".
@@ -50,9 +55,14 @@ public class ParserUtil {
     public static final int CASE = BETWEEN + 1;
 
     /**
+     * The token "CAST".
+     */
+    public static final int CAST = CASE + 1;
+
+    /**
      * The token "CHECK".
      */
-    public static final int CHECK = CASE + 1;
+    public static final int CHECK = CAST + 1;
 
     /**
      * The token "CONSTRAINT".
@@ -75,9 +85,19 @@ public class ParserUtil {
     public static final int CURRENT_DATE = CURRENT_CATALOG + 1;
 
     /**
+     * The token "CURRENT_PATH".
+     */
+    public static final int CURRENT_PATH = CURRENT_DATE + 1;
+
+    /**
+     * The token "CURRENT_ROLE".
+     */
+    public static final int CURRENT_ROLE = CURRENT_PATH + 1;
+
+    /**
      * The token "CURRENT_SCHEMA".
      */
-    public static final int CURRENT_SCHEMA = CURRENT_DATE + 1;
+    public static final int CURRENT_SCHEMA = CURRENT_ROLE + 1;
 
     /**
      * The token "CURRENT_TIME".
@@ -100,14 +120,29 @@ public class ParserUtil {
     public static final int DAY = CURRENT_USER + 1;
 
     /**
+     * The token "DEFAULT".
+     */
+    public static final int DEFAULT = DAY + 1;
+
+    /**
      * The token "DISTINCT".
      */
-    public static final int DISTINCT = DAY + 1;
+    public static final int DISTINCT = DEFAULT + 1;
+
+    /**
+     * The token "ELSE".
+     */
+    public static final int ELSE = DISTINCT + 1;
+
+    /**
+     * The token "END".
+     */
+    public static final int END = ELSE + 1;
 
     /**
      * The token "EXCEPT".
      */
-    public static final int EXCEPT = DISTINCT + 1;
+    public static final int EXCEPT = END + 1;
 
     /**
      * The token "EXISTS".
@@ -315,14 +350,29 @@ public class ParserUtil {
     public static final int SELECT = SECOND + 1;
 
     /**
+     * The token "SESSION_USER".
+     */
+    public static final int SESSION_USER = SELECT + 1;
+
+    /**
      * The token "SET".
      */
-    public static final int SET = SELECT + 1;
+    public static final int SET = SESSION_USER + 1;
+
+    /**
+     * The token "SYMMETRIC".
+     */
+    public static final int SYMMETRIC = SET + 1;
+
+    /**
+     * The token "SYSTEM_USER".
+     */
+    public static final int SYSTEM_USER = SYMMETRIC + 1;
 
     /**
      * The token "TABLE".
      */
-    public static final int TABLE = SET + 1;
+    public static final int TABLE = SYSTEM_USER + 1;
 
     /**
      * The token "TO".
@@ -350,9 +400,14 @@ public class ParserUtil {
     public static final int UNKNOWN = UNIQUE + 1;
 
     /**
+     * The token "USER".
+     */
+    public static final int USER = UNKNOWN + 1;
+
+    /**
      * The token "USING".
      */
-    public static final int USING = UNKNOWN + 1;
+    public static final int USING = USER + 1;
 
     /**
      * The token "VALUE".
@@ -365,9 +420,14 @@ public class ParserUtil {
     public static final int VALUES = VALUE + 1;
 
     /**
+     * The token "WHEN".
+     */
+    public static final int WHEN = VALUES + 1;
+
+    /**
      * The token "WHERE".
      */
-    public static final int WHERE = VALUES + 1;
+    public static final int WHERE = WHEN + 1;
 
     /**
      * The token "WINDOW".
@@ -432,6 +492,25 @@ public class ParserUtil {
 
     private ParserUtil() {
         // utility class
+    }
+
+    /**
+     * Add double quotes around an identifier if required and appends it to the
+     * specified string builder.
+     *
+     * @param builder string builder to append to
+     * @param s the identifier
+     * @param sqlFlags formatting flags
+     * @return the specified builder
+     */
+    public static StringBuilder quoteIdentifier(StringBuilder builder, String s, int sqlFlags) {
+        if (s == null) {
+            return builder.append("\"\"");
+        }
+        if ((sqlFlags & HasSQL.QUOTE_ONLY_WHEN_REQUIRED) != 0 && isSimpleIdentifier(s, false, false)) {
+            return builder.append(s);
+        }
+        return StringUtils.quoteIdentifier(builder, s);
     }
 
     /**
@@ -508,7 +587,7 @@ public class ParserUtil {
             return IDENTIFIER;
         }
         /*
-         * JdbcDatabaseMetaData.getSQLKeywords() and tests should be updated when new
+         * DatabaseMetaLocal.getSQLKeywords() and tests should be updated when new
          * non-SQL:2003 keywords are introduced here.
          */
         char c1 = s.charAt(start);
@@ -558,8 +637,10 @@ public class ParserUtil {
                 return ALL;
             } else if (eq("AND", s, ignoreCase, start, length)) {
                 return AND;
-            } if (eq("ARRAY", s, ignoreCase, start, length)) {
+            } else if (eq("ARRAY", s, ignoreCase, start, length)) {
                 return ARRAY;
+            } else if (eq("ASYMMETRIC", s, ignoreCase, start, length)) {
+                return ASYMMETRIC;
             }
             return IDENTIFIER;
         case 'B':
@@ -575,35 +656,33 @@ public class ParserUtil {
         case 'C':
             if (eq("CASE", s, ignoreCase, start, length)) {
                 return CASE;
+            } else if (eq("CAST", s, ignoreCase, start, length)) {
+                return CAST;
             } else if (eq("CHECK", s, ignoreCase, start, length)) {
                 return CHECK;
             } else if (eq("CONSTRAINT", s, ignoreCase, start, length)) {
                 return CONSTRAINT;
             } else if (eq("CROSS", s, ignoreCase, start, length)) {
                 return CROSS;
-            } else if (eq("CURRENT_CATALOG", s, ignoreCase, start, length)) {
-                return CURRENT_CATALOG;
-            } else if (eq("CURRENT_DATE", s, ignoreCase, start, length)) {
-                return CURRENT_DATE;
-            } else if (eq("CURRENT_SCHEMA", s, ignoreCase, start, length)) {
-                return CURRENT_SCHEMA;
-            } else if (eq("CURRENT_TIME", s, ignoreCase, start, length)) {
-                return CURRENT_TIME;
-            } else if (eq("CURRENT_TIMESTAMP", s, ignoreCase, start, length)) {
-                return CURRENT_TIMESTAMP;
-            } else if (eq("CURRENT_USER", s, ignoreCase, start, length)) {
-                return CURRENT_USER;
+            } else if (length >= 12 && "CURRENT_".regionMatches(ignoreCase, 1, s, start + 1, 7)) {
+                return getTokenTypeCurrent(s, ignoreCase, start, length);
             }
             return IDENTIFIER;
         case 'D':
             if (eq("DAY", s, ignoreCase, start, length)) {
                 return DAY;
+            } else if (eq("DEFAULT", s, ignoreCase, start, length)) {
+                return DEFAULT;
             } else if (eq("DISTINCT", s, ignoreCase, start, length)) {
                 return DISTINCT;
             }
             return IDENTIFIER;
         case 'E':
-            if (eq("EXCEPT", s, ignoreCase, start, length)) {
+            if (eq("ELSE", s, ignoreCase, start, length)) {
+                return ELSE;
+            } else if (eq("END", s, ignoreCase, start, length)) {
+                return END;
+            } else if (eq("EXCEPT", s, ignoreCase, start, length)) {
                 return EXCEPT;
             } else if (eq("EXISTS", s, ignoreCase, start, length)) {
                 return EXISTS;
@@ -755,8 +834,14 @@ public class ParserUtil {
                 return SECOND;
             } else if (eq("SELECT", s, ignoreCase, start, length)) {
                 return SELECT;
+            } else if (eq("SESSION_USER", s, ignoreCase, start, length)) {
+                return SESSION_USER;
             } else if (eq("SET", s, ignoreCase, start, length)) {
                 return SET;
+            } else if (eq("SYMMETRIC", s, ignoreCase, start, length)) {
+                return SYMMETRIC;
+            } else if (eq("SYSTEM_USER", s, ignoreCase, start, length)) {
+                return SYSTEM_USER;
             }
             if (additionalKeywords) {
                 if (eq("SYSDATE", s, ignoreCase, start, length) || eq("SYSTIME", s, ignoreCase, start, length)
@@ -785,6 +870,8 @@ public class ParserUtil {
                 return UNIQUE;
             } else if (eq("UNKNOWN", s, ignoreCase, start, length)) {
                 return UNKNOWN;
+            } else if (eq("USER", s, ignoreCase, start, length)) {
+                return USER;
             } else if (eq("USING", s, ignoreCase, start, length)) {
                 return USING;
             }
@@ -797,7 +884,9 @@ public class ParserUtil {
             }
             return IDENTIFIER;
         case 'W':
-            if (eq("WHERE", s, ignoreCase, start, length)) {
+            if (eq("WHEN", s, ignoreCase, start, length)) {
+                return WHEN;
+            } else if (eq("WHERE", s, ignoreCase, start, length)) {
                 return WHERE;
             } else if (eq("WINDOW", s, ignoreCase, start, length)) {
                 return WINDOW;
@@ -824,6 +913,40 @@ public class ParserUtil {
     private static boolean eq(String expected, String s, boolean ignoreCase, int start, int length) {
         // First letter was already checked
         return length == expected.length() && expected.regionMatches(ignoreCase, 1, s, start + 1, length - 1);
+    }
+
+    private static int getTokenTypeCurrent(String s, boolean ignoreCase, int start, int length) {
+        start += 8;
+        switch (length -= 8) {
+        case 4:
+            if ("CURRENT_DATE".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_DATE;
+            } else if ("CURRENT_PATH".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_PATH;
+            } else if ("CURRENT_ROLE".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_ROLE;
+            } else if ("CURRENT_TIME".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_TIME;
+            } else if ("CURRENT_USER".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_USER;
+            }
+            break;
+        case 6:
+            if ("CURRENT_SCHEMA".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_SCHEMA;
+            }
+            break;
+        case 7:
+            if ("CURRENT_CATALOG".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_CATALOG;
+            }
+            break;
+        case 9:
+            if ("CURRENT_TIMESTAMP".regionMatches(ignoreCase, 8, s, start, length)) {
+                return CURRENT_TIMESTAMP;
+            }
+        }
+        return IDENTIFIER;
     }
 
 }

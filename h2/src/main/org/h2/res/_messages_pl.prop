@@ -11,6 +11,7 @@
 22013=#Invalid PRECEDING or FOLLOWING size in window function: {0}
 22018=Błąd konwersji danych {0}
 22025=Błąd w LIKE ESCAPE: {0}
+2202E=#Array element error: {0}, expected {1}
 22030=#Value not permitted for column {0}: {1}
 22031=#Value not a member of enumerators {0}: {1}
 22032=#Empty enums are not allowed
@@ -27,13 +28,17 @@
 42000=Błąd składniowy w wyrażeniu SQL {0}
 42001=Błąd składniowy w wyrażeniu SQL {0}; oczekiwano {1}
 42602=#Invalid name {0}
+42622=#The name that starts with {0} is too long. The maximum length is {1}
 42S01=Tabela {0} już istnieje
 42S02=Tabela {0} nie istnieje
+42S03=#Table {0} not found (candidates are: {1})
+42S04=#Table {0} not found (this database is empty)
 42S11=Indeks {0} już istnieje
 42S12=Indeks {0} nie istnieje
 42S21=Zduplikowana nazwa kolumny {0}
 42S22=Kolumna {0} nie istnieje
 42S31=#Identical expressions should be used; expected {0}, found {1}
+54011=#Too many columns. The maximum count is {0}
 57014=Kwerenda została anulowana albo sesja wygasła
 90000=Funkcja {0} musi zwrócić dane
 90001=Metoda nie jest dozwolona w kwerendzie
@@ -43,7 +48,7 @@
 90006=Sekwencja {0} została wyczerpana
 90007=Obiekt jest zamknięty
 90008=Nieprawidłowa wartość {0} parametru {1}
-90009=Nie można utworzyć/zmienić sekwencji {0} ponieważ podane atrybuty są nieprawidłowe (wartość {1}, wartość początkowa {2}, wartość minimalna {3}, wartość maksymalna {4}, przyrost {5})
+90009=#Nie można utworzyć/zmienić sekwencji {0} ponieważ podane atrybuty są nieprawidłowe (base value {1}, wartość początkowa {2}, wartość minimalna {3}, wartość maksymalna {4}, przyrost {5}, cache size {6})
 90010=Nieprawidłowy format TO_CHAR {0}
 90011=#A file path that is implicitly relative to the current working directory is not allowed in the database URL {0}. Use an absolute path, ~/name, ./name, or the baseDir setting instead.
 90012=Parametr o numerze {0} nie jest ustalony
@@ -141,7 +146,7 @@
 90107=Nie można skasować {0} ponieważ zależy od {1}
 90108=Brak pamięci.
 90109=Widok {0} jest nieprawidłowy
-90110=#Comparing ARRAY to scalar value
+90110=#Values of types {0} and {1} are not comparable
 90111=Błąd dostępu do tabeli skrzyżowań przy pomocy zapytania SQL {0}, błąd: {1}
 90112=Rekord nie znaleziony przy probie kasowania z indeksu {0}
 90113=Nie wspierana opcja połączenia {0}

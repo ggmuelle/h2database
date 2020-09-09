@@ -22,7 +22,7 @@ import org.h2.value.VersionedValue;
 /**
  * A transaction.
  */
-public class Transaction {
+public final class Transaction {
 
     /**
      * The status of a closed transaction (committed or rolled back).
@@ -173,12 +173,12 @@ public class Transaction {
     /**
      * The current isolation level.
      */
-    IsolationLevel isolationLevel = IsolationLevel.READ_COMMITTED;
+    final IsolationLevel isolationLevel;
 
 
     Transaction(TransactionStore store, int transactionId, long sequenceNum, int status,
                 String name, long logId, int timeoutMillis, int ownerId,
-                TransactionStore.RollbackListener listener) {
+                IsolationLevel isolationLevel, TransactionStore.RollbackListener listener) {
         this.store = store;
         this.transactionId = transactionId;
         this.sequenceNum = sequenceNum;
@@ -186,6 +186,7 @@ public class Transaction {
         this.name = name;
         setTimeoutMillis(timeoutMillis);
         this.ownerId = ownerId;
+        this.isolationLevel = isolationLevel;
         this.listener = listener;
     }
 
@@ -244,7 +245,7 @@ public class Transaction {
                     break;
             }
             if (!valid) {
-                throw DataUtils.newIllegalStateException(
+                throw DataUtils.newMVStoreException(
                         DataUtils.ERROR_TRANSACTION_ILLEGAL_STATE,
                         "Transaction was illegally transitioned from {0} to {1}",
                         STATUS_NAMES[currentStatus], STATUS_NAMES[status]);
@@ -299,22 +300,24 @@ public class Transaction {
     }
 
     /**
-     * Sets the new isolation level. May be called only after creation of the
-     * transaction.
-     *
-     * @param isolationLevel the new isolation level
-     */
-    public void setIsolationLevel(IsolationLevel isolationLevel) {
-        this.isolationLevel = isolationLevel;
-    }
-
-    /**
      * Returns the isolation level of this transaction.
      *
      * @return the isolation level of this transaction
      */
     public IsolationLevel getIsolationLevel() {
         return isolationLevel;
+    }
+
+    boolean isReadCommitted() {
+        return isolationLevel == IsolationLevel.READ_COMMITTED;
+    }
+
+    /**
+     * Whether this transaction has isolation level READ_COMMITTED or below.
+     * @return true if isolation level is READ_COMMITTED or READ_UNCOMMITTED
+     */
+    public boolean allowNonRepeatableRead() {
+        return isolationLevel.allowNonRepeatableRead();
     }
 
     /**
@@ -341,7 +344,7 @@ public class Transaction {
                     TransactionMap<?,?> txMap = openMapX(map);
                     txMap.setStatementSnapshot(new Snapshot(map.flushAndGetRoot(), committingTransactions));
                 }
-                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                if (isReadCommitted()) {
                     undoLogRootReferences = store.collectUndoLogRootReferences();
                 }
             } while (committingTransactions != store.committingTransactions.get());
@@ -361,7 +364,7 @@ public class Transaction {
      * Mark an exit from SQL statement execution within this transaction.
      */
     public void markStatementEnd() {
-        if (isolationLevel.allowNonRepeatableRead()) {
+        if (allowNonRepeatableRead()) {
             releaseSnapshot();
         }
         for (TransactionMap<?, ?> transactionMap : transactionMaps.values()) {
@@ -370,7 +373,7 @@ public class Transaction {
     }
 
     private void markTransactionEnd() {
-        if (!isolationLevel.allowNonRepeatableRead()) {
+        if (!allowNonRepeatableRead()) {
             releaseSnapshot();
         }
     }
@@ -396,7 +399,7 @@ public class Transaction {
         long currentState = statusAndLogId.getAndIncrement();
         long logId = getLogId(currentState);
         if (logId >= LOG_ID_LIMIT) {
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_TRANSACTION_TOO_BIG,
                     "Transaction {0} has too many changes",
                     transactionId);
@@ -414,7 +417,7 @@ public class Transaction {
         long currentState = statusAndLogId.decrementAndGet();
         long logId = getLogId(currentState);
         if (logId >= LOG_ID_LIMIT) {
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_TRANSACTION_CORRUPT,
                     "Transaction {0} has internal error",
                     transactionId);
@@ -540,7 +543,7 @@ public class Transaction {
         }
         // this is moved outside of finally block to avert masking original exception, if any
         if (!success) {
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_TRANSACTION_ILLEGAL_STATE,
                     "Transaction {0} concurrently modified while rollback to savepoint was in progress",
                     transactionId);
@@ -619,7 +622,7 @@ public class Transaction {
      */
     private void checkOpen(int status) {
         if (status != STATUS_OPEN) {
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_TRANSACTION_ILLEGAL_STATE,
                     "Transaction {0} has status {1}, not OPEN", transactionId, STATUS_NAMES[status]);
         }
@@ -630,7 +633,7 @@ public class Transaction {
      */
     private void checkNotClosed() {
         if (getStatus() == STATUS_CLOSED) {
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_CLOSED, "Transaction {0} is closed", transactionId);
         }
     }
@@ -677,7 +680,7 @@ public class Transaction {
                                     + " modified by transaction %s%n",
                             transactionId, blockingMapName, blockingKey, toWaitFor));
                     if (isDeadlocked(toWaitFor)) {
-                        throw DataUtils.newIllegalStateException(DataUtils.ERROR_TRANSACTIONS_DEADLOCK, "{0}",
+                        throw DataUtils.newMVStoreException(DataUtils.ERROR_TRANSACTIONS_DEADLOCK, "{0}",
                                 details.toString());
                     }
                 }

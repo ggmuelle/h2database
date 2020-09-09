@@ -41,7 +41,7 @@ public class TestOpenClose extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -248,8 +248,7 @@ public class TestOpenClose extends TestDb {
     /**
      * A database event listener used in this test.
      */
-    public static final class MyDatabaseEventListener implements
-            DatabaseEventListener {
+    public static final class MyDatabaseEventListener implements DatabaseEventListener {
 
         @Override
         public void exceptionThrown(SQLException e, String sql) {
@@ -257,7 +256,7 @@ public class TestOpenClose extends TestDb {
         }
 
         @Override
-        public void setProgress(int state, String name, int current, int max) {
+        public void setProgress(int state, String name, long current, long max) {
             String stateName;
             switch (state) {
             case STATE_SCAN_FILE:
@@ -283,20 +282,6 @@ public class TestOpenClose extends TestDb {
             // System.out.println(": " + stateName);
         }
 
-        @Override
-        public void closingDatabase() {
-            // nothing to do
-        }
-
-        @Override
-        public void init(String url) {
-            // nothing to do
-        }
-
-        @Override
-        public void opened() {
-            // nothing to do
-        }
     }
 
 }

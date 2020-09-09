@@ -7,7 +7,7 @@ package org.h2.constraint;
 
 import java.util.HashSet;
 import org.h2.api.ErrorCode;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionVisitor;
 import org.h2.index.Index;
@@ -59,8 +59,8 @@ public class ConstraintCheck extends Constraint {
             buff.append(" COMMENT ");
             StringUtils.quoteStringSQL(buff, comment);
         }
-        buff.append(" CHECK(");
-        expr.getUnenclosedSQL(buff, DEFAULT_SQL_FLAGS).append(") NOCHECK");
+        buff.append(" CHECK");
+        expr.getEnclosedSQL(buff, DEFAULT_SQL_FLAGS).append(" NOCHECK");
         return buff.toString();
     }
 
@@ -81,7 +81,7 @@ public class ConstraintCheck extends Constraint {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         table.removeConstraint(this);
         database.removeMeta(session, getId());
         filter = null;
@@ -91,7 +91,7 @@ public class ConstraintCheck extends Constraint {
     }
 
     @Override
-    public void checkRow(Session session, Table t, Row oldRow, Row newRow) {
+    public void checkRow(SessionLocal session, Table t, Row oldRow, Row newRow) {
         if (newRow == null) {
             return;
         }
@@ -142,14 +142,14 @@ public class ConstraintCheck extends Constraint {
     }
 
     @Override
-    public void checkExistingData(Session session) {
+    public void checkExistingData(SessionLocal session) {
         if (session.getDatabase().isStarting()) {
             // don't check at startup
             return;
         }
-        StringBuilder builder = new StringBuilder().append("SELECT 1 FROM ");
-        filter.getTable().getSQL(builder, DEFAULT_SQL_FLAGS).append(" WHERE NOT(");
-        expr.getSQL(builder, DEFAULT_SQL_FLAGS).append(')');
+        StringBuilder builder = new StringBuilder().append("SELECT NULL FROM ");
+        filter.getTable().getSQL(builder, DEFAULT_SQL_FLAGS).append(" WHERE NOT ");
+        expr.getSQL(builder, DEFAULT_SQL_FLAGS, Expression.AUTO_PARENTHESES);
         String sql = builder.toString();
         ResultInterface r = session.prepare(sql).query(1);
         if (r.next()) {

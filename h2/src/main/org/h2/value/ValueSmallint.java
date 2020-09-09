@@ -5,6 +5,8 @@
  */
 package org.h2.value;
 
+import java.math.BigDecimal;
+
 import org.h2.api.ErrorCode;
 import org.h2.engine.CastDataProvider;
 import org.h2.message.DbException;
@@ -15,9 +17,14 @@ import org.h2.message.DbException;
 public final class ValueSmallint extends Value {
 
     /**
-     * The precision in digits.
+     * The precision in bits.
      */
-    static final int PRECISION = 5;
+    static final int PRECISION = 16;
+
+    /**
+     * The approximate precision in decimal digits.
+     */
+    static final int DECIMAL_PRECISION = 5;
 
     /**
      * The maximum display size of a SMALLINT.
@@ -104,12 +111,38 @@ public final class ValueSmallint extends Value {
     }
 
     @Override
+    public byte[] getBytes() {
+        short value = this.value;
+        return new byte[] { (byte) (value >> 8), (byte) value };
+    }
+
+    @Override
     public short getShort() {
         return value;
     }
 
     @Override
     public int getInt() {
+        return value;
+    }
+
+    @Override
+    public long getLong() {
+        return value;
+    }
+
+    @Override
+    public BigDecimal getBigDecimal() {
+        return BigDecimal.valueOf(value);
+    }
+
+    @Override
+    public float getFloat() {
+        return value;
+    }
+
+    @Override
+    public double getDouble() {
         return value;
     }
 
@@ -125,11 +158,6 @@ public final class ValueSmallint extends Value {
 
     @Override
     public int hashCode() {
-        return value;
-    }
-
-    @Override
-    public Object getObject() {
         return value;
     }
 

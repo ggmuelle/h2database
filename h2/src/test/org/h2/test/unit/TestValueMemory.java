@@ -6,19 +6,20 @@
 package org.h2.test.unit;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Random;
-
 import org.h2.api.IntervalQualifier;
 import org.h2.engine.Constants;
-import org.h2.result.SimpleResult;
 import org.h2.store.DataHandler;
 import org.h2.store.FileStore;
-import org.h2.store.LobStorageFrontend;
+import org.h2.store.LobStorageInterface;
 import org.h2.test.TestBase;
 import org.h2.test.utils.MemoryFootprint;
 import org.h2.util.DateTimeUtils;
@@ -33,15 +34,17 @@ import org.h2.value.ValueBinary;
 import org.h2.value.ValueBoolean;
 import org.h2.value.ValueChar;
 import org.h2.value.ValueDate;
+import org.h2.value.ValueDecfloat;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueInteger;
 import org.h2.value.ValueInterval;
 import org.h2.value.ValueJavaObject;
 import org.h2.value.ValueJson;
+import org.h2.value.ValueLob;
+import org.h2.value.ValueLobFile;
 import org.h2.value.ValueNull;
 import org.h2.value.ValueNumeric;
 import org.h2.value.ValueReal;
-import org.h2.value.ValueResultSet;
 import org.h2.value.ValueRow;
 import org.h2.value.ValueSmallint;
 import org.h2.value.ValueTime;
@@ -67,7 +70,7 @@ public class TestValueMemory extends TestBase implements DataHandler {
     private final Random random = new Random(1);
     private final SmallLRUCache<String, String[]> lobFileListCache = SmallLRUCache
             .newInstance(128);
-    private LobStorageFrontend lobStorage;
+    private LobStorageTest lobStorage;
 
     /**
      * Run just this test.
@@ -78,7 +81,7 @@ public class TestValueMemory extends TestBase implements DataHandler {
         // run using -javaagent:ext/h2-1.2.139.jar
         TestBase test = TestBase.createCaller().init();
         test.config.traceTest = true;
-        test.test();
+        test.testFromMain();
     }
 
     @Override
@@ -184,6 +187,8 @@ public class TestValueMemory extends TestBase implements DataHandler {
             return ValueDouble.get(random.nextDouble());
         case Value.REAL:
             return ValueReal.get(random.nextFloat());
+        case Value.DECFLOAT:
+            return ValueDecfloat.get(new BigDecimal(random.nextInt()));
         case Value.TIME:
             return ValueTime.fromNanos(randomTimeNanos());
         case Value.TIME_TZ:
@@ -212,11 +217,9 @@ public class TestValueMemory extends TestBase implements DataHandler {
             return getLobStorage().createClob(new StringReader(s), len);
         }
         case Value.ARRAY:
-            return ValueArray.get(createArray());
+            return ValueArray.get(createArray(), null);
         case Value.ROW:
             return ValueRow.get(createArray());
-        case Value.RESULT_SET:
-            return ValueResultSet.get(new SimpleResult());
         case Value.JAVA_OBJECT:
             return ValueJavaObject.getNoCopy(randomBytes(random.nextInt(100)));
         case Value.UUID:
@@ -341,9 +344,9 @@ public class TestValueMemory extends TestBase implements DataHandler {
     }
 
     @Override
-    public LobStorageFrontend getLobStorage() {
+    public LobStorageInterface getLobStorage() {
         if (lobStorage == null) {
-            lobStorage = new LobStorageFrontend(this);
+            lobStorage = new LobStorageTest();
         }
         return lobStorage;
     }
@@ -358,4 +361,68 @@ public class TestValueMemory extends TestBase implements DataHandler {
     public CompareMode getCompareMode() {
         return CompareMode.getInstance(null, 0);
     }
+
+
+    private class LobStorageTest implements LobStorageInterface {
+
+        LobStorageTest() {
+        }
+
+        @Override
+        public void removeLob(ValueLob lob) {
+            // not stored in the database
+        }
+
+        @Override
+        public InputStream getInputStream(long lobId,
+                long byteCount) throws IOException {
+            // this method is only implemented on the server side of a TCP connection
+            throw new IllegalStateException();
+        }
+
+        @Override
+        public boolean isReadOnly() {
+            return false;
+        }
+
+        @Override
+        public ValueLob copyLob(ValueLob old, int tableId, long length) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void removeAllForTable(int tableId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public ValueLob createBlob(InputStream in, long maxLength) {
+            // need to use a temp file, because the input stream could come from
+            // the same database, which would create a weird situation (trying
+            // to read a block while writing something)
+            return ValueLobFile.createTempBlob(in, maxLength, TestValueMemory.this);
+        }
+
+        /**
+         * Create a CLOB object.
+         *
+         * @param reader the reader
+         * @param maxLength the maximum length (-1 if not known)
+         * @return the LOB
+         */
+        @Override
+        public ValueLob createClob(Reader reader, long maxLength) {
+            // need to use a temp file, because the input stream could come from
+            // the same database, which would create a weird situation (trying
+            // to read a block while writing something)
+            return ValueLobFile.createTempClob(reader, maxLength, TestValueMemory.this);
+        }
+
+        @Override
+        public void init() {
+            // nothing to do
+        }
+
+    }
+
 }

@@ -30,7 +30,7 @@ public class TestRights extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -68,7 +68,7 @@ public class TestRights extends TestDb {
 
     private void testLinkedTableMeta() throws SQLException {
         deleteDb("rights");
-        try (Connection conn = getConnection("rights")) {
+        try (Connection conn = getConnection("rights;OLD_INFORMATION_SCHEMA=TRUE")) {
             stat = conn.createStatement();
             stat.execute("create user test password 'test'");
             stat.execute("create linked table test" +
@@ -290,7 +290,7 @@ public class TestRights extends TestDb {
 
         DatabaseMetaData meta = conn2.getMetaData();
         ResultSet rs;
-        rs = meta.getTables(null, null, "%", new String[]{"TABLE", "VIEW", "SEQUENCE"});
+        rs = meta.getTables(null, "PUBLIC", "%", new String[]{"TABLE", "VIEW", "SEQUENCE"});
         assertTrue(rs.next());
         assertTrue(rs.next());
         assertFalse(rs.next());

@@ -22,14 +22,11 @@ import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
 import org.h2.engine.Constants;
 import org.h2.message.DbException;
-import org.h2.result.ResultInterface;
-import org.h2.result.SimpleResult;
 import org.h2.util.Bits;
 import org.h2.util.DateTimeUtils;
 import org.h2.util.LegacyDateTimeUtils;
 import org.h2.util.MathUtils;
 import org.h2.util.Utils;
-import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 import org.h2.value.ValueArray;
 import org.h2.value.ValueBigint;
@@ -38,16 +35,18 @@ import org.h2.value.ValueBoolean;
 import org.h2.value.ValueChar;
 import org.h2.value.ValueCollectionBase;
 import org.h2.value.ValueDate;
+import org.h2.value.ValueDecfloat;
 import org.h2.value.ValueDouble;
 import org.h2.value.ValueInteger;
 import org.h2.value.ValueInterval;
 import org.h2.value.ValueJavaObject;
 import org.h2.value.ValueJson;
 import org.h2.value.ValueLob;
+import org.h2.value.ValueLobDatabase;
+import org.h2.value.ValueLobInMemory;
 import org.h2.value.ValueNull;
 import org.h2.value.ValueNumeric;
 import org.h2.value.ValueReal;
-import org.h2.value.ValueResultSet;
 import org.h2.value.ValueRow;
 import org.h2.value.ValueSmallint;
 import org.h2.value.ValueTime;
@@ -96,7 +95,6 @@ public class Data {
     private static final byte BLOB = 15;
     private static final byte CLOB = 16;
     private static final byte ARRAY = 17;
-    private static final byte RESULT_SET = 18;
     private static final byte JAVA_OBJECT = 19;
     private static final byte UUID = 20;
     private static final byte CHAR = 21;
@@ -126,6 +124,7 @@ public class Data {
     private static final int TIMESTAMP_TZ_2 = 137;
     private static final int TIME_TZ = 138;
     private static final int BINARY = 139;
+    private static final int DECFLOAT = 140;
 
     private static final long MILLIS_PER_MINUTE = 1000 * 60;
 
@@ -531,6 +530,15 @@ public class Data {
             }
             break;
         }
+        case Value.DECFLOAT: {
+            writeByte((byte) DECFLOAT);
+            BigDecimal x = v.getBigDecimal();
+            writeVarInt(x.scale());
+            byte[] bytes = x.unscaledValue().toByteArray();
+            writeVarInt(bytes.length);
+            write(bytes, 0, bytes.length);
+            break;
+        }
         case Value.TIME:
             if (storeLocalTime) {
                 writeByte((byte) LOCAL_TIME);
@@ -587,18 +595,10 @@ public class Data {
         }
         case Value.TIMESTAMP_TZ: {
             ValueTimestampTimeZone ts = (ValueTimestampTimeZone) v;
-            int timeZoneOffset = ts.getTimeZoneOffsetSeconds();
-            if (timeZoneOffset % 60 == 0) {
-                writeByte(TIMESTAMP_TZ);
-                writeVarLong(ts.getDateValue());
-                writeVarLong(ts.getTimeNanos());
-                writeVarInt(timeZoneOffset / 60);
-            } else {
-                writeByte((byte) TIMESTAMP_TZ_2);
-                writeVarLong(ts.getDateValue());
-                writeVarLong(ts.getTimeNanos());
-                writeTimeZone(timeZoneOffset);
-            }
+            writeByte((byte) TIMESTAMP_TZ_2);
+            writeVarLong(ts.getDateValue());
+            writeVarLong(ts.getTimeNanos());
+            writeTimeZone(ts.getTimeZoneOffsetSeconds());
             break;
         }
         case Value.GEOMETRY:
@@ -684,13 +684,14 @@ public class Data {
         case Value.CLOB: {
             writeByte(type == Value.BLOB ? BLOB : CLOB);
             ValueLob lob = (ValueLob) v;
-            byte[] small = lob.getSmall();
-            if (small == null) {
+            if (lob instanceof ValueLobDatabase) {
+                ValueLobDatabase lobDb = (ValueLobDatabase) lob;
                 writeVarInt(-3);
-                writeVarInt(lob.getTableId());
-                writeVarLong(lob.getLobId());
+                writeVarInt(lobDb.getTableId());
+                writeVarLong(lobDb.getLobId());
                 writeVarLong(lob.getType().getPrecision());
             } else {
+                byte[] small = ((ValueLobInMemory)lob).getSmall();
                 writeVarInt(small.length);
                 write(small, 0, small.length);
             }
@@ -704,30 +705,6 @@ public class Data {
             for (Value x : list) {
                 writeValue(x);
             }
-            break;
-        }
-        case Value.RESULT_SET: {
-            writeByte(RESULT_SET);
-            ResultInterface result = ((ValueResultSet) v).getResult();
-            result.reset();
-            int columnCount = result.getVisibleColumnCount();
-            writeVarInt(columnCount);
-            for (int i = 0; i < columnCount; i++) {
-                writeString(result.getAlias(i));
-                writeString(result.getColumnName(i));
-                TypeInfo columnType = result.getColumnType(i);
-                writeVarInt(columnType.getValueType());
-                writeVarLong(columnType.getPrecision());
-                writeVarInt(columnType.getScale());
-            }
-            while (result.next()) {
-                writeByte((byte) 1);
-                Value[] row = result.currentRow();
-                for (int i = 0; i < columnCount; i++) {
-                    writeValue(row[i]);
-                }
-            }
-            writeByte((byte) 0);
             break;
         }
         case Value.INTERVAL_YEAR:
@@ -803,7 +780,7 @@ public class Data {
             return ValueInteger.get(readVarInt());
         case BIGINT_NEG:
             return ValueBigint.get(-readVarLong());
-        case Value.BIGINT:
+        case BIGINT:
             return ValueBigint.get(readVarLong());
         case TINYINT:
             return ValueTinyint.get(readByte());
@@ -824,8 +801,14 @@ public class Data {
             int len = readVarInt();
             byte[] buff = Utils.newBytes(len);
             read(buff, 0, len);
-            BigInteger b = new BigInteger(buff);
-            return ValueNumeric.get(new BigDecimal(b, scale));
+            return ValueNumeric.get(new BigDecimal(new BigInteger(buff), scale));
+        }
+        case DECFLOAT: {
+            int scale = readVarInt();
+            int len = readVarInt();
+            byte[] buff = Utils.newBytes(len);
+            read(buff, 0, len);
+            return ValueDecfloat.get(new BigDecimal(new BigInteger(buff), scale));
         }
         case LOCAL_DATE:
             return ValueDate.fromDateValue(readVarLong());
@@ -911,13 +894,13 @@ public class Data {
             if (smallLen >= 0) {
                 byte[] small = Utils.newBytes(smallLen);
                 read(small, 0, smallLen);
-                return ValueLob.createSmallLob(type == BLOB ? Value.BLOB : Value.CLOB, small);
+                return ValueLobInMemory.createSmallLob(type == BLOB ? Value.BLOB : Value.CLOB, small);
             } else if (smallLen == -3) {
                 int tableId = readVarInt();
                 long lobId = readVarLong();
                 long precision = readVarLong();
-                return ValueLob.create(type == BLOB ? Value.BLOB : Value.CLOB, handler, tableId,
-                        lobId, null, precision);
+                return ValueLobDatabase.create(type == BLOB ? Value.BLOB : Value.CLOB, handler, tableId,
+                        lobId, precision);
             } else {
                 throw getOldLobException(smallLen);
             }
@@ -930,22 +913,7 @@ public class Data {
             for (int i = 0; i < len; i++) {
                 list[i] = readValue();
             }
-            return type == ARRAY ? ValueArray.get(list) : ValueRow.get(list);
-        }
-        case RESULT_SET: {
-            SimpleResult rs = new SimpleResult();
-            int columns = readVarInt();
-            for (int i = 0; i < columns; i++) {
-                rs.addColumn(readString(), readString(), readVarInt(), readVarLong(), readVarInt());
-            }
-            while (readByte() != 0) {
-                Value[] o = new Value[columns];
-                for (int i = 0; i < columns; i++) {
-                    o[i] = readValue();
-                }
-                rs.addRow(o);
-            }
-            return ValueResultSet.get(rs);
+            return type == ARRAY ? ValueArray.get(list, null) : ValueRow.get(list);
         }
         case INTERVAL: {
             int ordinal = readByte();
@@ -1092,8 +1060,13 @@ public class Data {
                 }
                 return 1 + getVarIntLen(scale) + getVarLongLen(b.longValue());
             }
-            byte[] bytes = b.toByteArray();
-            return 1 + getVarIntLen(scale) + getVarIntLen(bytes.length) + bytes.length;
+            int len = b.toByteArray().length;
+            return 1 + getVarIntLen(scale) + getVarIntLen(len) + len;
+        }
+        case Value.DECFLOAT: {
+            BigDecimal x = v.getBigDecimal();
+            int len = x.unscaledValue().toByteArray().length;
+            return 1 + getVarIntLen(x.scale()) + getVarIntLen(len) + len;
         }
         case Value.TIME:
             if (storeLocalTime) {
@@ -1136,8 +1109,7 @@ public class Data {
             long dateValue = ts.getDateValue();
             long nanos = ts.getTimeNanos();
             int tz = ts.getTimeZoneOffsetSeconds();
-            return 1 + getVarLongLen(dateValue) + getVarLongLen(nanos) +
-                    (tz % 60 == 0 ? getVarIntLen(tz / 60) : getTimeZoneLen(tz));
+            return 1 + getVarLongLen(dateValue) + getVarLongLen(nanos) + getTimeZoneLen(tz);
         }
         case Value.BINARY:
         case Value.GEOMETRY:
@@ -1159,13 +1131,14 @@ public class Data {
         case Value.CLOB: {
             int len = 1;
             ValueLob lob = (ValueLob) v;
-            byte[] small = lob.getSmall();
-            if (small == null) {
+            if (lob instanceof ValueLobDatabase) {
+                ValueLobDatabase lobDb = (ValueLobDatabase) lob;
                 len += getVarIntLen(-3);
-                len += getVarIntLen(lob.getTableId());
-                len += getVarLongLen(lob.getLobId());
+                len += getVarIntLen(lobDb.getTableId());
+                len += getVarLongLen(lobDb.getLobId());
                 len += getVarLongLen(lob.getType().getPrecision());
             } else {
+                byte[] small = ((ValueLobInMemory)lob).getSmall();
                 len += getVarIntLen(small.length);
                 len += small.length;
             }
@@ -1178,30 +1151,6 @@ public class Data {
             for (Value x : list) {
                 len += getValueLen(x, storeLocalTime);
             }
-            return len;
-        }
-        case Value.RESULT_SET: {
-            int len = 1;
-            ResultInterface result = ((ValueResultSet) v).getResult();
-            int columnCount = result.getVisibleColumnCount();
-            len += getVarIntLen(columnCount);
-            for (int i = 0; i < columnCount; i++) {
-                len += getStringLen(result.getAlias(i));
-                len += getStringLen(result.getColumnName(i));
-                TypeInfo columnType = result.getColumnType(i);
-                len += getVarIntLen(columnType.getValueType());
-                len += getVarLongLen(columnType.getPrecision());
-                len += getVarIntLen(columnType.getScale());
-            }
-            while (result.next()) {
-                len++;
-                Value[] row = result.currentRow();
-                for (int i = 0; i < columnCount; i++) {
-                    Value val = row[i];
-                    len += getValueLen(val, storeLocalTime);
-                }
-            }
-            len++;
             return len;
         }
         case Value.INTERVAL_YEAR:

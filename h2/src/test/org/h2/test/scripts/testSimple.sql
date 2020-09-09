@@ -98,13 +98,13 @@ select is_nullable from information_schema.columns c where c.table_name = 'TEST'
 alter table test alter column id set data type varchar;
 > ok
 
-select type_name from information_schema.columns c where c.table_name = 'TEST' and c.column_name = 'ID';
->> VARCHAR
+select data_type from information_schema.columns c where c.table_name = 'TEST' and c.column_name = 'ID';
+>> CHARACTER VARYING
 
 alter table test alter column id type int;
 > ok
 
-select type_name from information_schema.columns c where c.table_name = 'TEST' and c.column_name = 'ID';
+select data_type from information_schema.columns c where c.table_name = 'TEST' and c.column_name = 'ID';
 >> INTEGER
 
 alter table test alter column id drop default;
@@ -424,7 +424,7 @@ ALTER TABLE TEST ALTER COLUMN ID RESTART WITH ?;
 };
 > update count: 0
 
-INSERT INTO TEST VALUES(NULL);
+INSERT INTO TEST VALUES(DEFAULT);
 > update count: 1
 
 SELECT * FROM TEST;
@@ -682,7 +682,7 @@ CREATE VIEW TEST_VIEW AS SELECT COUNT(ID) X FROM TEST;
 > ok
 
 explain SELECT * FROM TEST_VIEW WHERE X>1;
->> SELECT "PUBLIC"."TEST_VIEW"."X" FROM "PUBLIC"."TEST_VIEW" /* SELECT COUNT(ID) AS X FROM PUBLIC.TEST /* PUBLIC.TEST.tableScan */ HAVING COUNT("ID") >= ?1: X > 1 */ WHERE "X" > 1
+>> SELECT "PUBLIC"."TEST_VIEW"."X" FROM "PUBLIC"."TEST_VIEW" /* SELECT COUNT(ID) AS X FROM PUBLIC.TEST /* PUBLIC.TEST.tableScan */ HAVING COUNT(ID) >= ?1: X > CAST(1 AS BIGINT) */ WHERE "X" > CAST(1 AS BIGINT)
 
 DROP VIEW TEST_VIEW;
 > ok
@@ -728,12 +728,6 @@ create table table2(f2 int not null primary key references table1(f1));
 
 drop table table1, table2;
 > ok
-
-select case when 1=null then 1 else 2 end;
->> 2
-
-select case (1) when 1 then 1 else 2 end;
->> 1
 
 create table test(id int);
 > ok
@@ -865,12 +859,12 @@ create alias parse_long for "java.lang.Long.parseLong(java.lang.String)";
 comment on alias parse_long is 'Parse a long with base';
 > ok
 
-select remarks from information_schema.function_aliases where alias_name = 'PARSE_LONG';
+select remarks from information_schema.routines where routine_name = 'PARSE_LONG';
 >> Parse a long with base
 
 @reconnect
 
-select remarks from information_schema.function_aliases where alias_name = 'PARSE_LONG';
+select remarks from information_schema.routines where routine_name = 'PARSE_LONG';
 >> Parse a long with base
 
 drop alias parse_long;
@@ -958,23 +952,6 @@ drop schema tests cascade;
 > ok
 
 @reconnect
-
-create constant abc value 1;
-> ok
-
-comment on constant abc is 'One';
-> ok
-
-select remarks from information_schema.constants where constant_name = 'ABC';
->> One
-
-@reconnect
-
-select remarks from information_schema.constants where constant_name = 'ABC';
->> One
-
-drop constant abc;
-> ok
 
 drop table test;
 > ok
@@ -1256,7 +1233,7 @@ select count(*) from test1 where a='abccccc';
 >> 0
 
 truncate table test1;
-> ok
+> update count: 8
 
 insert into test1 values ('abcaaaa');
 > update count: 1

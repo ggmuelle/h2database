@@ -5,6 +5,8 @@
  */
 package org.h2.mvstore;
 
+import static org.h2.engine.Constants.MEMORY_POINTER;
+
 import java.util.AbstractList;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
@@ -16,7 +18,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import static org.h2.engine.Constants.MEMORY_POINTER;
+
 import org.h2.mvstore.type.DataType;
 import org.h2.mvstore.type.ObjectDataType;
 import org.h2.util.MemoryEstimator;
@@ -30,9 +32,8 @@ import org.h2.util.MemoryEstimator;
  * @param <K> the key class
  * @param <V> the value class
  */
-public class MVMap<K, V> extends AbstractMap<K, V>
-                            implements ConcurrentMap<K, V>
-{
+public class MVMap<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> {
+
     /**
      * The store.
      */
@@ -91,8 +92,8 @@ public class MVMap<K, V> extends AbstractMap<K, V>
     }
 
     // meta map constructor
-    MVMap(MVStore store, DataType<K> keyType, DataType<V> valueType) {
-        this(store, keyType, valueType, 0, 0, new AtomicReference<>(), store.getKeysPerPage(), false);
+    MVMap(MVStore store, int id, DataType<K> keyType, DataType<V> valueType) {
+        this(store, keyType, valueType, id, 0, new AtomicReference<>(), store.getKeysPerPage(), false);
         setInitialRoot(createEmptyLeaf(), store.getCurrentVersion());
     }
 
@@ -420,11 +421,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
     @SuppressWarnings("unchecked")
     @Override
     public final V get(Object key) {
-        return getIt((K)key);
-    }
-
-    public final V getIt(K key) {
-        return get(getRootPage(), key);
+        return get(getRootPage(), (K) key);
     }
 
     /**
@@ -659,6 +656,12 @@ public class MVMap<K, V> extends AbstractMap<K, V>
         return cursor(from, null, false);
     }
 
+    /**
+     * Iterate over a number of keys in reverse order
+     *
+     * @param from the first key to return
+     * @return the iterator
+     */
     public final Iterator<K> keyIteratorReverse(K from) {
         return cursor(from, null, true);
     }
@@ -940,7 +943,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
         if (closed) {
             int id = getId();
             String mapName = store.getMapName(id);
-            throw DataUtils.newIllegalStateException(
+            throw DataUtils.newMVStoreException(
                     DataUtils.ERROR_CLOSED, "Map {0}({1}) is closed. {2}", mapName, id, store.getPanicException());
         }
         if (readOnly) {
@@ -1059,7 +1062,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
      * @return true if has changes
      */
     final boolean hasChangesSince(long version) {
-        return getRoot().hasChangesSince(version);
+        return getRoot().hasChangesSince(version, isPersistent());
     }
 
     /**
@@ -1576,6 +1579,9 @@ public class MVMap<K, V> extends AbstractMap<K, V>
         }
     }
 
+    /**
+     * The decision on what to do on an update.
+     */
     public enum Decision { ABORT, REMOVE, PUT, REPEAT }
 
     /**
@@ -1589,8 +1595,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
      *
      * @param <V> value type of the map
      */
-    public abstract static class DecisionMaker<V>
-    {
+    public abstract static class DecisionMaker<V> {
         /**
          * Decision maker for transaction rollback.
          */
@@ -1668,8 +1673,13 @@ public class MVMap<K, V> extends AbstractMap<K, V>
 
         /**
          * Makes a decision about how to proceed with the update.
+         *
+         * @param existingValue the old value
+         * @param providedValue the new value
+         * @param tip the cursor position
+         * @return the decision
          */
-        public Decision decide(V existingValue, V providedValue, CursorPos<?,?> tip) {
+        public Decision decide(V existingValue, V providedValue, CursorPos<?, ?> tip) {
             return decide(existingValue, providedValue);
         }
 
@@ -1995,8 +2005,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
         return MemoryEstimator.samplingPct(stats);
     }
 
-    private static final class EqualsDecisionMaker<V> extends DecisionMaker<V>
-    {
+    private static final class EqualsDecisionMaker<V> extends DecisionMaker<V> {
         private final DataType<V> dataType;
         private final V           expectedValue;
         private       Decision    decision;
@@ -2029,8 +2038,7 @@ public class MVMap<K, V> extends AbstractMap<K, V>
         }
     }
 
-    private static final class RewriteDecisionMaker<V> extends DecisionMaker<V>
-    {
+    private static final class RewriteDecisionMaker<V> extends DecisionMaker<V> {
         private final long pagePos;
         private Decision decision;
 

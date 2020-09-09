@@ -33,7 +33,7 @@ public class TestRecovery extends TestDb {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -92,8 +92,7 @@ public class TestRecovery extends TestDb {
         DeleteDbFiles.execute(getBaseDir(), "recovery", true);
         Connection conn = getConnection("recovery");
         Statement stat = conn.createStatement();
-        stat.execute("CREATE ALIAS IF NOT EXISTS FTL_INIT " +
-                "FOR \"org.h2.fulltext.FullTextLucene.init\"");
+        stat.execute("CREATE ALIAS IF NOT EXISTS FTL_INIT FOR 'org.h2.fulltext.FullTextLucene.init'");
         stat.execute("CALL FTL_INIT()");
         stat.execute("create table test(id int primary key, name varchar) as " +
                 "select 1, 'Hello'");
@@ -336,7 +335,6 @@ public class TestRecovery extends TestDb {
         Connection conn = getConnection("recovery");
         Statement stat = conn.createStatement();
         stat.execute("SET COLLATION EN");
-        stat.execute("SET BINARY_COLLATION UNSIGNED");
         stat.execute("CREATE TABLE TEST(A VARCHAR)");
         conn.close();
 

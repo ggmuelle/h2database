@@ -12,7 +12,7 @@ import org.h2.table.Table;
 /**
  * A persistent database setting.
  */
-public class Setting extends DbObjectBase {
+public final class Setting extends DbObject {
 
     private int intValue;
     private String stringValue;
@@ -70,7 +70,7 @@ public class Setting extends DbObjectBase {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         database.removeMeta(session, getId());
         invalidate();
     }

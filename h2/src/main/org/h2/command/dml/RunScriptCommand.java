@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 
 import org.h2.command.CommandInterface;
 import org.h2.command.Prepared;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.result.ResultInterface;
 import org.h2.util.ScriptReader;
@@ -33,16 +33,19 @@ public class RunScriptCommand extends ScriptBase {
 
     private Charset charset = StandardCharsets.UTF_8;
 
+    private boolean truncateLargeLength;
+
     private boolean variableBinary;
 
-    public RunScriptCommand(Session session) {
+    public RunScriptCommand(SessionLocal session) {
         super(session);
     }
 
     @Override
-    public int update() {
+    public long update() {
         session.getUser().checkAdmin();
         int count = 0;
+        boolean oldTruncateLargeLength = session.isTruncateLargeLength();
         boolean oldVariableBinary = session.isVariableBinary();
         try {
             openInput();
@@ -51,6 +54,9 @@ public class RunScriptCommand extends ScriptBase {
             reader.mark(1);
             if (reader.read() != UTF8_BOM) {
                 reader.reset();
+            }
+            if (truncateLargeLength) {
+                session.setTruncateLargeLength(true);
             }
             if (variableBinary) {
                 session.setVariableBinary(true);
@@ -71,6 +77,9 @@ public class RunScriptCommand extends ScriptBase {
         } catch (IOException e) {
             throw DbException.convertIOException(e, null);
         } finally {
+            if (truncateLargeLength) {
+                session.setTruncateLargeLength(oldTruncateLargeLength);
+            }
             if (variableBinary) {
                 session.setVariableBinary(oldVariableBinary);
             }
@@ -97,6 +106,16 @@ public class RunScriptCommand extends ScriptBase {
 
     public void setCharset(Charset charset) {
         this.charset = charset;
+    }
+
+    /**
+     * Changes parsing of a too large lengths of data types.
+     *
+     * @param truncateLargeLength
+     *            {@code true} to truncate length in definitions of data types
+     */
+    public void setTruncateLargeLength(boolean truncateLargeLength) {
+        this.truncateLargeLength = truncateLargeLength;
     }
 
     /**

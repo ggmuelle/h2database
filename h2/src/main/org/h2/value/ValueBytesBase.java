@@ -8,6 +8,8 @@ package org.h2.value;
 import java.util.Arrays;
 
 import org.h2.engine.CastDataProvider;
+import org.h2.engine.Constants;
+import org.h2.message.DbException;
 import org.h2.util.Bits;
 import org.h2.util.StringUtils;
 import org.h2.util.Utils;
@@ -28,36 +30,36 @@ abstract class ValueBytesBase extends Value {
     int hash;
 
     ValueBytesBase(byte[] value) {
+        int length = value.length;
+        if (length > Constants.MAX_STRING_LENGTH) {
+            throw DbException.getValueTooLongException(getTypeName(getValueType()),
+                    StringUtils.convertBytesToHex(value, 41), length);
+        }
         this.value = value;
     }
 
     @Override
-    public byte[] getBytesNoCopy() {
+    public final byte[] getBytes() {
+        return Utils.cloneByteArray(value);
+    }
+
+    @Override
+    public final byte[] getBytesNoCopy() {
         return value;
     }
 
     @Override
-    public final byte[] getBytes() {
-        return Utils.cloneByteArray(getBytesNoCopy());
-    }
-
-    @Override
-    public int compareTypeSafe(Value v, CompareMode mode, CastDataProvider provider) {
-        byte[] v2 = ((ValueBytesBase) v).value;
-        int valueType = getValueType();
-        if (valueType == GEOMETRY || valueType == JSON || mode.isBinaryUnsigned()) {
-            return Bits.compareNotNullUnsigned(value, v2);
-        }
-        return Bits.compareNotNullSigned(value, v2);
+    public final int compareTypeSafe(Value v, CompareMode mode, CastDataProvider provider) {
+        return Bits.compareNotNullUnsigned(value, ((ValueBytesBase) v).value);
     }
 
     @Override
     public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
-        return StringUtils.convertBytesToHex(builder.append("X'"), getBytesNoCopy()).append('\'');
+        return StringUtils.convertBytesToHex(builder.append("X'"), value).append('\'');
     }
 
     @Override
-    public int hashCode() {
+    public final int hashCode() {
         int h = hash;
         if (h == 0) {
             h = getClass().hashCode() ^ Utils.getByteArrayHash(value);
@@ -70,17 +72,12 @@ abstract class ValueBytesBase extends Value {
     }
 
     @Override
-    public Object getObject() {
-        return getBytes();
-    }
-
-    @Override
     public int getMemory() {
         return value.length + 24;
     }
 
     @Override
-    public boolean equals(Object other) {
+    public final boolean equals(Object other) {
         return other != null && getClass() == other.getClass() && Arrays.equals(value, ((ValueBytesBase) other).value);
     }
 

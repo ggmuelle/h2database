@@ -7,7 +7,7 @@ package org.h2.constraint;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.index.Index;
 import org.h2.result.Row;
 import org.h2.schema.Schema;
@@ -54,13 +54,7 @@ public class ConstraintUnique extends Constraint {
             StringUtils.quoteStringSQL(builder, comment);
         }
         builder.append(' ').append(getConstraintType().getSqlName()).append('(');
-        for (int i = 0, l = columns.length; i < l; i++) {
-            if (i > 0) {
-                builder.append(", ");
-            }
-            columns[i].column.getSQL(builder, DEFAULT_SQL_FLAGS);
-        }
-        builder.append(')');
+        IndexColumn.writeColumns(builder, columns, DEFAULT_SQL_FLAGS).append(')');
         if (internalIndex && indexOwner && forTable == this.table) {
             builder.append(" INDEX ");
             index.getSQL(builder, DEFAULT_SQL_FLAGS);
@@ -99,7 +93,7 @@ public class ConstraintUnique extends Constraint {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         ArrayList<Constraint> constraints = table.getConstraints();
         if (constraints != null) {
             constraints = new ArrayList<>(table.getConstraints());
@@ -121,7 +115,7 @@ public class ConstraintUnique extends Constraint {
     }
 
     @Override
-    public void checkRow(Session session, Table t, Row oldRow, Row newRow) {
+    public void checkRow(SessionLocal session, Table t, Row oldRow, Row newRow) {
         // unique index check is enough
     }
 
@@ -150,7 +144,7 @@ public class ConstraintUnique extends Constraint {
     }
 
     @Override
-    public void checkExistingData(Session session) {
+    public void checkExistingData(SessionLocal session) {
         // no need to check: when creating the unique index any problems are
         // found
     }

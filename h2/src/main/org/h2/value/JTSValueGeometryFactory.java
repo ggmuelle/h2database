@@ -5,8 +5,10 @@
  */
 package org.h2.value;
 
+import org.h2.api.ErrorCode;
 import org.h2.api.ValueGeometryFactory;
 import org.h2.message.DbException;
+import org.h2.util.StringUtils;
 import org.h2.util.geometry.EWKBUtils;
 import org.h2.util.geometry.EWKTUtils;
 import org.h2.util.geometry.GeometryUtils.EnvelopeAndDimensionSystemTarget;
@@ -46,11 +48,6 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 		} catch (RuntimeException ex) {
 			throw DbException.convert(ex);
 		}
-//		try {
-//            return new WKTReader().read(s);
-//        } catch (ParseException ex) {
-//            throw DbException.convert(ex);
-//        }
 	}
 
 	@Override
@@ -74,12 +71,6 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
     @Override
 	public JTSValueGeometry get(String s) {
     	return get(getGeometry(s));
-//        try {
-//            Geometry g = new WKTReader().read(s);
-//            return get(g);
-//        } catch (ParseException ex) {
-//            throw DbException.convert(ex);
-//        }
     }
 
     @Override
@@ -105,6 +96,23 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 				? (JTSValueGeometry) Value.cache(new JTSValueGeometry(EWKBUtils.envelope2wkb(envelope), envelope, null))
 				: ValueNull.INSTANCE;
     }
+    
+    /**
+     * Get or create a geometry value for the given EWKB value.
+     *
+     * @param bytes the WKB representation of the geometry
+     * @return the value
+     */
+    public ValueGeometry<?> getFromEWKB(byte[] bytes) {
+    	try {
+    		EnvelopeAndDimensionSystemTarget target = new EnvelopeAndDimensionSystemTarget();
+    		EWKBUtils.parseEWKB(bytes, target);
+    		return (ValueGeometry<?>) Value.cache(new JTSValueGeometry(
+    				EWKBUtils.ewkb2ewkb(bytes, target.getDimensionSystem()), target.getEnvelope(), null));
+    	} catch (RuntimeException ex) {
+    		throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, StringUtils.convertBytesToHex(bytes));
+    	}
+    }
 
 	@Override
 	public JTSValueGeometry getFromGeometry(Object g) {
@@ -127,10 +135,10 @@ public class JTSValueGeometryFactory implements ValueGeometryFactory<JTSValueGeo
 		return g instanceof Geometry;
 	}
 
-	 @Override
-		public Class<Geometry> getGeometryType() {
-			return Geometry.class;
-		}
+	@Override
+	public Class<Geometry> getGeometryType() {
+		return Geometry.class;
+	}
 
     private static byte[] convertToWKB(Geometry g) {
         boolean includeSRID = g.getSRID() != 0;

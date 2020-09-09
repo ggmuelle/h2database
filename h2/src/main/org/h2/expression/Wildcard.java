@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import org.h2.api.ErrorCode;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.table.Column;
 import org.h2.table.ColumnResolver;
@@ -23,7 +23,8 @@ import org.h2.value.Value;
  * This object is only used temporarily during the parsing phase, and later
  * replaced by column expressions.
  */
-public class Wildcard extends Expression {
+public final class Wildcard extends Expression {
+
     private final String schema;
     private final String table;
 
@@ -63,7 +64,7 @@ public class Wildcard extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         throw DbException.throwInternalError(toString());
     }
 
@@ -82,7 +83,7 @@ public class Wildcard extends Expression {
     }
 
     @Override
-    public Expression optimize(Session session) {
+    public Expression optimize(SessionLocal session) {
         throw DbException.get(ErrorCode.SYNTAX_ERROR_1, table);
     }
 
@@ -102,21 +103,19 @@ public class Wildcard extends Expression {
     }
 
     @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
         if (table != null) {
             StringUtils.quoteIdentifier(builder, table).append('.');
         }
         builder.append('*');
         if (exceptColumns != null) {
-            builder.append(" EXCEPT (");
-            writeExpressions(builder, exceptColumns, sqlFlags);
-            builder.append(')');
+            writeExpressions(builder.append(" EXCEPT ("), exceptColumns, sqlFlags).append(')');
         }
         return builder;
     }
 
     @Override
-    public void updateAggregate(Session session, int stage) {
+    public void updateAggregate(SessionLocal session, int stage) {
         DbException.throwInternalError(toString());
     }
 

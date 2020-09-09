@@ -15,17 +15,18 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.Set;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.IntervalQualifier;
 import org.h2.api.SpatialDriver;
 import org.h2.api.ValueGeometryFactory;
 import org.h2.engine.CastDataProvider;
+import org.h2.engine.Mode.CharPadding;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
-import org.h2.result.ResultInterface;
-import org.h2.result.SimpleResult;
 import org.h2.store.DataHandler;
 import org.h2.util.Bits;
 import org.h2.util.DateTimeUtils;
@@ -33,6 +34,7 @@ import org.h2.util.HasSQL;
 import org.h2.util.IntervalUtils;
 import org.h2.util.JdbcUtils;
 import org.h2.util.MathUtils;
+import org.h2.util.StringUtils;
 import org.h2.util.geometry.GeoJsonUtils;
 
 /**
@@ -43,7 +45,7 @@ import org.h2.util.geometry.GeoJsonUtils;
  * @author Noel Grandin
  * @author Nicolas Fortin, Atelier SIG, IRSTV FR CNRS 24888
  */
-public abstract class Value extends VersionedValue<Value> implements HasSQL {
+public abstract class Value extends VersionedValue<Value> implements HasSQL, Typed {
 
     /**
      * The data type is unknown at this time.
@@ -53,221 +55,316 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
     /**
      * The value type for NULL.
      */
-    public static final int NULL = 0;
+    public static final int NULL = UNKNOWN + 1;
 
     /**
-     * The value type for BOOLEAN values.
+     * The value type for CHARACTER values.
      */
-    public static final int BOOLEAN = 1;
-
-    /**
-     * The value type for TINYINT values.
-     */
-    public static final int TINYINT = 2;
-
-    /**
-     * The value type for SMALLINT values.
-     */
-    public static final int SMALLINT = 3;
-
-    /**
-     * The value type for INTEGER values.
-     */
-    public static final int INTEGER = 4;
-
-    /**
-     * The value type for BIGINT values.
-     */
-    public static final int BIGINT = 5;
-
-    /**
-     * The value type for NUMERIC values.
-     */
-    public static final int NUMERIC = 6;
-
-    /**
-     * The value type for DOUBLE PRECISION values.
-     */
-    public static final int DOUBLE = 7;
-
-    /**
-     * The value type for REAL values.
-     */
-    public static final int REAL = 8;
-
-    /**
-     * The value type for TIME values.
-     */
-    public static final int TIME = 9;
-
-    /**
-     * The value type for DATE values.
-     */
-    public static final int DATE = 10;
-
-    /**
-     * The value type for TIMESTAMP values.
-     */
-    public static final int TIMESTAMP = 11;
-
-    /**
-     * The value type for BINARY VARYING values.
-     */
-    public static final int VARBINARY = 12;
+    public static final int CHAR = NULL + 1;
 
     /**
      * The value type for CHARACTER VARYING values.
      */
-    public static final int VARCHAR = 13;
+    public static final int VARCHAR = CHAR + 1;
+
+    /**
+     * The value type for CHARACTER LARGE OBJECT values.
+     */
+    public static final int CLOB = VARCHAR + 1;
 
     /**
      * The value type for VARCHAR_IGNORECASE values.
      */
-    public static final int VARCHAR_IGNORECASE = 14;
-
-    /**
-     * The value type for BLOB values.
-     */
-    public static final int BLOB = 15;
-
-    /**
-     * The value type for CLOB values.
-     */
-    public static final int CLOB = 16;
-
-    /**
-     * The value type for ARRAY values.
-     */
-    public static final int ARRAY = 17;
-
-    /**
-     * The value type for RESULT_SET values.
-     */
-    public static final int RESULT_SET = 18;
-
-    /**
-     * The value type for JAVA_OBJECT values.
-     */
-    public static final int JAVA_OBJECT = 19;
-
-    /**
-     * The value type for UUID values.
-     */
-    public static final int UUID = 20;
-
-    /**
-     * The value type for CHAR values.
-     */
-    public static final int CHAR = 21;
-
-    /**
-     * The value type for string values with a fixed size.
-     */
-    public static final int GEOMETRY = 22;
-
-    /*
-     * 23 was a short-lived experiment "TIMESTAMP UTC" which has been removed.
-     */
-
-    /**
-     * The value type for TIMESTAMP WITH TIME ZONE values.
-     */
-    public static final int TIMESTAMP_TZ = 24;
-
-    /**
-     * The value type for ENUM values.
-     */
-    public static final int ENUM = 25;
-
-    /**
-     * The value type for {@code INTERVAL YEAR} values.
-     */
-    public static final int INTERVAL_YEAR = 26;
-
-    /**
-     * The value type for {@code INTERVAL MONTH} values.
-     */
-    public static final int INTERVAL_MONTH = 27;
-
-    /**
-     * The value type for {@code INTERVAL DAY} values.
-     */
-    public static final int INTERVAL_DAY = 28;
-
-    /**
-     * The value type for {@code INTERVAL HOUR} values.
-     */
-    public static final int INTERVAL_HOUR = 29;
-
-    /**
-     * The value type for {@code INTERVAL MINUTE} values.
-     */
-    public static final int INTERVAL_MINUTE = 30;
-
-    /**
-     * The value type for {@code INTERVAL SECOND} values.
-     */
-    public static final int INTERVAL_SECOND = 31;
-
-    /**
-     * The value type for {@code INTERVAL YEAR TO MONTH} values.
-     */
-    public static final int INTERVAL_YEAR_TO_MONTH = 32;
-
-    /**
-     * The value type for {@code INTERVAL DAY TO HOUR} values.
-     */
-    public static final int INTERVAL_DAY_TO_HOUR = 33;
-
-    /**
-     * The value type for {@code INTERVAL DAY TO MINUTE} values.
-     */
-    public static final int INTERVAL_DAY_TO_MINUTE = 34;
-
-    /**
-     * The value type for {@code INTERVAL DAY TO SECOND} values.
-     */
-    public static final int INTERVAL_DAY_TO_SECOND = 35;
-
-    /**
-     * The value type for {@code INTERVAL HOUR TO MINUTE} values.
-     */
-    public static final int INTERVAL_HOUR_TO_MINUTE = 36;
-
-    /**
-     * The value type for {@code INTERVAL HOUR TO SECOND} values.
-     */
-    public static final int INTERVAL_HOUR_TO_SECOND = 37;
-
-    /**
-     * The value type for {@code INTERVAL MINUTE TO SECOND} values.
-     */
-    public static final int INTERVAL_MINUTE_TO_SECOND = 38;
-
-    /**
-     * The value type for ROW values.
-     */
-    public static final int ROW = 39;
-
-    /**
-     * The value type for JSON values.
-     */
-    public static final int JSON = 40;
-
-    /**
-     * The value type for TIME WITH TIME ZONE values.
-     */
-    public static final int TIME_TZ = 41;
+    public static final int VARCHAR_IGNORECASE = CLOB + 1;
 
     /**
      * The value type for BINARY values.
      */
-    public static final int BINARY = 42;
+    public static final int BINARY = VARCHAR_IGNORECASE + 1;
+
+    /**
+     * The value type for BINARY VARYING values.
+     */
+    public static final int VARBINARY = BINARY + 1;
+
+    /**
+     * The value type for BINARY LARGE OBJECT values.
+     */
+    public static final int BLOB = VARBINARY + 1;
+
+    /**
+     * The value type for BOOLEAN values.
+     */
+    public static final int BOOLEAN = BLOB + 1;
+
+    /**
+     * The value type for TINYINT values.
+     */
+    public static final int TINYINT = BOOLEAN + 1;
+
+    /**
+     * The value type for SMALLINT values.
+     */
+    public static final int SMALLINT = TINYINT + 1;
+
+    /**
+     * The value type for INTEGER values.
+     */
+    public static final int INTEGER = SMALLINT + 1;
+
+    /**
+     * The value type for BIGINT values.
+     */
+    public static final int BIGINT = INTEGER + 1;
+
+    /**
+     * The value type for NUMERIC values.
+     */
+    public static final int NUMERIC = BIGINT + 1;
+
+    /**
+     * The value type for REAL values.
+     */
+    public static final int REAL = NUMERIC + 1;
+
+    /**
+     * The value type for DOUBLE PRECISION values.
+     */
+    public static final int DOUBLE = REAL + 1;
+
+    /**
+     * The value type for DECFLOAT values.
+     */
+    public static final int DECFLOAT = DOUBLE + 1;
+
+    /**
+     * The value type for DATE values.
+     */
+    public static final int DATE = DECFLOAT + 1;
+
+    /**
+     * The value type for TIME values.
+     */
+    public static final int TIME = DATE + 1;
+
+    /**
+     * The value type for TIME WITH TIME ZONE values.
+     */
+    public static final int TIME_TZ = TIME + 1;
+
+    /**
+     * The value type for TIMESTAMP values.
+     */
+    public static final int TIMESTAMP = TIME_TZ + 1;
+
+    /**
+     * The value type for TIMESTAMP WITH TIME ZONE values.
+     */
+    public static final int TIMESTAMP_TZ = TIMESTAMP + 1;
+
+    /**
+     * The value type for {@code INTERVAL YEAR} values.
+     */
+    public static final int INTERVAL_YEAR = TIMESTAMP_TZ + 1;
+
+    /**
+     * The value type for {@code INTERVAL MONTH} values.
+     */
+    public static final int INTERVAL_MONTH = INTERVAL_YEAR + 1;
+
+    /**
+     * The value type for {@code INTERVAL DAY} values.
+     */
+    public static final int INTERVAL_DAY = INTERVAL_MONTH + 1;
+
+    /**
+     * The value type for {@code INTERVAL HOUR} values.
+     */
+    public static final int INTERVAL_HOUR = INTERVAL_DAY + 1;
+
+    /**
+     * The value type for {@code INTERVAL MINUTE} values.
+     */
+    public static final int INTERVAL_MINUTE = INTERVAL_HOUR + 1;
+
+    /**
+     * The value type for {@code INTERVAL SECOND} values.
+     */
+    public static final int INTERVAL_SECOND = INTERVAL_MINUTE + 1;
+
+    /**
+     * The value type for {@code INTERVAL YEAR TO MONTH} values.
+     */
+    public static final int INTERVAL_YEAR_TO_MONTH = INTERVAL_SECOND + 1;
+
+    /**
+     * The value type for {@code INTERVAL DAY TO HOUR} values.
+     */
+    public static final int INTERVAL_DAY_TO_HOUR = INTERVAL_YEAR_TO_MONTH + 1;
+
+    /**
+     * The value type for {@code INTERVAL DAY TO MINUTE} values.
+     */
+    public static final int INTERVAL_DAY_TO_MINUTE = INTERVAL_DAY_TO_HOUR + 1;
+
+    /**
+     * The value type for {@code INTERVAL DAY TO SECOND} values.
+     */
+    public static final int INTERVAL_DAY_TO_SECOND = INTERVAL_DAY_TO_MINUTE + 1;
+
+    /**
+     * The value type for {@code INTERVAL HOUR TO MINUTE} values.
+     */
+    public static final int INTERVAL_HOUR_TO_MINUTE = INTERVAL_DAY_TO_SECOND + 1;
+
+    /**
+     * The value type for {@code INTERVAL HOUR TO SECOND} values.
+     */
+    public static final int INTERVAL_HOUR_TO_SECOND = INTERVAL_HOUR_TO_MINUTE + 1;
+
+    /**
+     * The value type for {@code INTERVAL MINUTE TO SECOND} values.
+     */
+    public static final int INTERVAL_MINUTE_TO_SECOND = INTERVAL_HOUR_TO_SECOND + 1;
+
+    /**
+     * The value type for JAVA_OBJECT values.
+     */
+    public static final int JAVA_OBJECT = INTERVAL_MINUTE_TO_SECOND + 1;
+
+    /**
+     * The value type for ENUM values.
+     */
+    public static final int ENUM = JAVA_OBJECT + 1;
+
+    /**
+     * The value type for string values with a fixed size.
+     */
+    public static final int GEOMETRY = ENUM + 1;
+
+    /**
+     * The value type for JSON values.
+     */
+    public static final int JSON = GEOMETRY + 1;
+
+    /**
+     * The value type for UUID values.
+     */
+    public static final int UUID = JSON + 1;
+
+    /**
+     * The value type for ARRAY values.
+     */
+    public static final int ARRAY = UUID + 1;
+
+    /**
+     * The value type for ROW values.
+     */
+    public static final int ROW = ARRAY + 1;
 
     /**
      * The number of value types.
      */
-    public static final int TYPE_COUNT = BINARY + 1;
+    public static final int TYPE_COUNT = ROW + 1;
+
+    /**
+     * Group for untyped NULL data type.
+     */
+    static final int GROUP_NULL = 0;
+
+    /**
+     * Group for character string data types.
+     */
+    static final int GROUP_CHARACTER_STRING = GROUP_NULL + 1;
+
+    /**
+     * Group for binary string data types.
+     */
+    static final int GROUP_BINARY_STRING = GROUP_CHARACTER_STRING + 1;
+
+    /**
+     * Group for BINARY data type.
+     */
+    static final int GROUP_BOOLEAN = GROUP_BINARY_STRING + 1;
+
+    /**
+     * Group for numeric data types.
+     */
+    static final int GROUP_NUMERIC = GROUP_BOOLEAN + 1;
+
+    /**
+     * Group for datetime data types.
+     */
+    static final int GROUP_DATETIME = GROUP_NUMERIC + 1;
+
+    /**
+     * Group for year-month interval data types.
+     */
+    static final int GROUP_INTERVAL_YM = GROUP_DATETIME + 1;
+
+    /**
+     * Group for day-time interval data types.
+     */
+    static final int GROUP_INTERVAL_DT = GROUP_INTERVAL_YM + 1;
+
+    /**
+     * Group for other data types (JAVA_OBJECT, UUID, GEOMETRY, ENUM, JSON).
+     */
+    static final int GROUP_OTHER = GROUP_INTERVAL_DT + 1;
+
+    /**
+     * Group for collection data types (ARRAY, ROW).
+     */
+    static final int GROUP_COLLECTION = GROUP_OTHER + 1;
+
+    static final byte GROUPS[] = {
+            // NULL
+            GROUP_NULL,
+            // CHAR, VARCHAR, CLOB, VARCHAR_IGNORECASE
+            GROUP_CHARACTER_STRING, GROUP_CHARACTER_STRING, GROUP_CHARACTER_STRING, GROUP_CHARACTER_STRING,
+            // BINARY, VARBINARY, BLOB
+            GROUP_BINARY_STRING, GROUP_BINARY_STRING, GROUP_BINARY_STRING,
+            // BOOLEAN
+            GROUP_BOOLEAN,
+            // TINYINT, SMALLINT, INTEGER, BIGINT, NUMERIC, REAL, DOUBLE, DECFLOAT
+            GROUP_NUMERIC, GROUP_NUMERIC, GROUP_NUMERIC, GROUP_NUMERIC, GROUP_NUMERIC, GROUP_NUMERIC, GROUP_NUMERIC,
+            GROUP_NUMERIC,
+            // DATE, TIME, TIME_TZ, TIMESTAMP, TIMESTAMP_TZ
+            GROUP_DATETIME, GROUP_DATETIME, GROUP_DATETIME, GROUP_DATETIME, GROUP_DATETIME,
+            // INTERVAL_YEAR, INTERVAL_MONTH
+            GROUP_INTERVAL_YM, GROUP_INTERVAL_YM,
+            // INTERVAL_DAY, INTERVAL_HOUR, INTERVAL_MINUTE, INTERVAL_SECOND
+            GROUP_INTERVAL_DT, GROUP_INTERVAL_DT, GROUP_INTERVAL_DT, GROUP_INTERVAL_DT,
+            // INTERVAL_YEAR_TO_MONTH
+            GROUP_INTERVAL_YM,
+            // INTERVAL_DAY_TO_HOUR, INTERVAL_DAY_TO_MINUTE,
+            // INTERVAL_DAY_TO_SECOND, INTERVAL_HOUR_TO_MINUTE,
+            // INTERVAL_HOUR_TO_SECOND, INTERVAL_MINUTE_TO_SECOND
+            GROUP_INTERVAL_DT, GROUP_INTERVAL_DT, GROUP_INTERVAL_DT, GROUP_INTERVAL_DT, GROUP_INTERVAL_DT,
+            GROUP_INTERVAL_DT,
+            // JAVA_OBJECT, ENUM, GEOMETRY, JSON, UUID
+            GROUP_OTHER, GROUP_OTHER, GROUP_OTHER, GROUP_OTHER, GROUP_OTHER,
+            // ARRAY, ROW
+            GROUP_COLLECTION, GROUP_COLLECTION,
+            //
+    };
+
+    private static final String NAMES[] = {
+            "NULL", //
+            "CHARACTER", "CHARACTER VARYING", "CHARACTER LARGE OBJECT", "VARCHAR_IGNORECASE", //
+            "BINARY", "BINARY VARYING", "BINARY LARGE OBJECT", //
+            "BOOLEAN", //
+            "TINYINT", "SMALLINT", "INTEGER", "BIGINT", //
+            "NUMERIC", "REAL", "DOUBLE PRECISION", "DECFLOAT", //
+            "DATE", "TIME", "TIME WITH TIME ZONE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", //
+            "INTERVAL YEAR", "INTERVAL MONTH", //
+            "INTERVAL DAY", "INTERVAL HOUR", "INTERVAL MINUTE", "INTERVAL SECOND", //
+            "INTERVAL YEAR TO MONTH", //
+            "INTERVAL DAY TO HOUR", "INTERVAL DAY TO MINUTE", "INTERVAL DAY TO SECOND", //
+            "INTERVAL HOUR TO MINUTE", "INTERVAL HOUR TO SECOND", "INTERVAL MINUTE TO SECOND", //
+            "JAVA_OBJECT", "ENUM", "GEOMETRY", "JSON", "UUID", //
+            "ARRAY", "ROW", //
+    };
 
     /**
      * Empty array of values.
@@ -316,6 +413,17 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
     static final int ASSIGN_TO = 2;
 
     /**
+     * Returns name of the specified data type.
+     *
+     * @param valueType
+     *            the value type
+     * @return the name
+     */
+    public static String getTypeName(int valueType) {
+        return NAMES[valueType];
+    }
+
+    /**
      * Check the range of the parameters.
      *
      * @param zeroBasedOffset the offset (0 meaning no offset)
@@ -331,11 +439,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         }
     }
 
-    /**
-     * Returns the data type.
-     *
-     * @return the data type
-     */
+    @Override
     public abstract TypeInfo getType();
 
     /**
@@ -358,20 +462,6 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         return 24;
     }
 
-    /**
-     * Get the value as a string.
-     *
-     * @return the string
-     */
-    public abstract String getString();
-
-    /**
-     * Get the value as an object.
-     *
-     * @return the object
-     */
-    public abstract Object getObject();
-
     @Override
     public abstract int hashCode();
 
@@ -388,105 +478,6 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
     public abstract boolean equals(Object other);
 
     /**
-     * Get the order of this value type.
-     *
-     * @param type the value type
-     * @return the order number
-     */
-    static int getOrder(int type) {
-        switch (type) {
-        case UNKNOWN:
-            return 1_000;
-        case NULL:
-            return 2_000;
-        case VARCHAR:
-            return 10_000;
-        case CLOB:
-            return 11_000;
-        case CHAR:
-            return 12_000;
-        case VARCHAR_IGNORECASE:
-            return 13_000;
-        case BOOLEAN:
-            return 20_000;
-        case TINYINT:
-            return 21_000;
-        case SMALLINT:
-            return 22_000;
-        case INTEGER:
-            return 23_000;
-        case BIGINT:
-            return 24_000;
-        case NUMERIC:
-            return 25_000;
-        case REAL:
-            return 26_000;
-        case DOUBLE:
-            return 27_000;
-        case INTERVAL_YEAR:
-            return 28_000;
-        case INTERVAL_MONTH:
-            return 28_100;
-        case INTERVAL_YEAR_TO_MONTH:
-            return 28_200;
-        case INTERVAL_DAY:
-            return 29_000;
-        case INTERVAL_HOUR:
-            return 29_100;
-        case INTERVAL_DAY_TO_HOUR:
-            return 29_200;
-        case INTERVAL_MINUTE:
-            return 29_300;
-        case INTERVAL_HOUR_TO_MINUTE:
-            return 29_400;
-        case INTERVAL_DAY_TO_MINUTE:
-            return 29_500;
-        case INTERVAL_SECOND:
-            return 29_600;
-        case INTERVAL_MINUTE_TO_SECOND:
-            return 29_700;
-        case INTERVAL_HOUR_TO_SECOND:
-            return 29_800;
-        case INTERVAL_DAY_TO_SECOND:
-            return 29_900;
-        case TIME:
-            return 30_000;
-        case TIME_TZ:
-            return 30_500;
-        case DATE:
-            return 31_000;
-        case TIMESTAMP:
-            return 32_000;
-        case TIMESTAMP_TZ:
-            return 34_000;
-        case BINARY:
-            return 39_000;
-        case VARBINARY:
-            return 40_000;
-        case BLOB:
-            return 41_000;
-        case JAVA_OBJECT:
-            return 42_000;
-        case UUID:
-            return 43_000;
-        case GEOMETRY:
-            return 44_000;
-        case ENUM:
-            return 45_000;
-        case JSON:
-            return 46_000;
-        case ARRAY:
-            return 50_000;
-        case ROW:
-            return 51_000;
-        case RESULT_SET:
-            return 52_000;
-        default:
-            throw DbException.throwInternalError("type:"+type);
-        }
-    }
-
-    /**
      * Get the higher value order type of two value types. If values need to be
      * converted to match the other operands value type, the value with the
      * lower order is converted to the value with the higher order.
@@ -496,40 +487,244 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @return the higher value type of the two
      */
     public static int getHigherOrder(int t1, int t2) {
-        if (t1 == UNKNOWN || t2 == UNKNOWN) {
-            if (t1 == t2) {
-                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "?, ?");
-            } else if (t1 == NULL) {
-                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "NULL, ?");
-            } else if (t2 == NULL) {
-                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "?, NULL");
-            }
-        }
         if (t1 == t2) {
+            if (t1 == UNKNOWN) {
+                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "?, ?");
+            }
             return t1;
         }
-        int o1 = getOrder(t1);
-        int o2 = getOrder(t2);
-        return o1 > o2 ? t1 : t2;
+        if (t1 < t2) {
+            int t = t1;
+            t1 = t2;
+            t2 = t;
+        }
+        if (t1 == UNKNOWN) {
+            if (t2 == NULL) {
+                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "?, NULL");
+            }
+            return t2;
+        } else if (t2 == UNKNOWN) {
+            if (t1 == NULL) {
+                throw DbException.get(ErrorCode.UNKNOWN_DATA_TYPE_1, "NULL, ?");
+            }
+            return t1;
+        }
+        if (t2 == NULL) {
+            return t1;
+        }
+        return getHigherOrderKnown(t1, t2);
     }
 
-    /**
-     * Get the higher data type of two data types. If values need to be
-     * converted to match the other operands data type, the value with the
-     * lower order is converted to the value with the higher order.
-     *
-     * @param type1 the first data type
-     * @param type2 the second data type
-     * @return the higher data type of the two
-     */
-    public static TypeInfo getHigherType(TypeInfo type1, TypeInfo type2) {
-        int t1 = type1.getValueType(), t2 = type2.getValueType();
-        int dataType = getHigherOrder(t1, t2);
-        long precision = Math.max(type1.getPrecision(), type2.getPrecision());
-        int scale = Math.max(type1.getScale(), type2.getScale());
-        ExtTypeInfo ext1 = type1.getExtTypeInfo();
-        ExtTypeInfo ext = dataType == t1 && ext1 != null ? ext1 : dataType == t2 ? type2.getExtTypeInfo() : null;
-        return TypeInfo.getTypeInfo(dataType, precision, scale, ext);
+    static int getHigherOrderKnown(int t1, int t2) {
+        int g1 = GROUPS[t1], g2 = GROUPS[t2];
+        switch (g1) {
+        case GROUP_BOOLEAN:
+            if (g2 == GROUP_BINARY_STRING) {
+                throw getDataTypeCombinationException(BOOLEAN, t2);
+            }
+            break;
+        case GROUP_NUMERIC:
+            return getHigherNumeric(t1, t2, g2);
+        case GROUP_DATETIME:
+            return getHigherDateTime(t1, t2, g2);
+        case GROUP_INTERVAL_YM:
+            return getHigherIntervalYearMonth(t1, t2, g2);
+        case GROUP_INTERVAL_DT:
+            return getHigherIntervalDayTime(t1, t2, g2);
+        case GROUP_OTHER:
+            return getHigherOther(t1, t2, g2);
+        }
+        return t1;
+    }
+
+    private static int getHigherNumeric(int t1, int t2, int g2) {
+        if (g2 == GROUP_NUMERIC) {
+            switch (t1) {
+            case REAL:
+                switch (t2) {
+                case INTEGER:
+                    return DOUBLE;
+                case BIGINT:
+                case NUMERIC:
+                    return DECFLOAT;
+                }
+                break;
+            case DOUBLE:
+                switch (t2) {
+                case BIGINT:
+                case NUMERIC:
+                    return DECFLOAT;
+                }
+                break;
+            }
+        } else if (g2 == GROUP_BINARY_STRING) {
+            throw getDataTypeCombinationException(t1, t2);
+        }
+        return t1;
+    }
+
+    private static int getHigherDateTime(int t1, int t2, int g2) {
+        if (g2 == GROUP_CHARACTER_STRING) {
+            return t1;
+        }
+        if (g2 != GROUP_DATETIME) {
+            throw getDataTypeCombinationException(t1, t2);
+        }
+        switch (t1) {
+        case TIME:
+            if (t2 == DATE) {
+                return TIMESTAMP;
+            }
+            break;
+        case TIME_TZ:
+            if (t2 == DATE) {
+                return TIMESTAMP_TZ;
+            }
+            break;
+        case TIMESTAMP:
+            if (t2 == TIME_TZ) {
+                return TIMESTAMP_TZ;
+            }
+        }
+        return t1;
+    }
+
+    private static int getHigherIntervalYearMonth(int t1, int t2, int g2) {
+        switch (g2) {
+        case GROUP_INTERVAL_YM:
+            if (t1 == INTERVAL_MONTH && t2 == INTERVAL_YEAR) {
+                return INTERVAL_YEAR_TO_MONTH;
+            }
+            //$FALL-THROUGH$
+        case GROUP_CHARACTER_STRING:
+        case GROUP_NUMERIC:
+            return t1;
+        default:
+            throw getDataTypeCombinationException(t1, t2);
+        }
+    }
+
+    private static int getHigherIntervalDayTime(int t1, int t2, int g2) {
+        switch (g2) {
+        case GROUP_INTERVAL_DT:
+            break;
+        case GROUP_CHARACTER_STRING:
+        case GROUP_NUMERIC:
+            return t1;
+        default:
+            throw getDataTypeCombinationException(t1, t2);
+        }
+        switch (t1) {
+        case INTERVAL_HOUR:
+            return INTERVAL_DAY_TO_HOUR;
+        case INTERVAL_MINUTE:
+            if (t2 == INTERVAL_DAY) {
+                return INTERVAL_DAY_TO_MINUTE;
+            }
+            return INTERVAL_HOUR_TO_MINUTE;
+        case INTERVAL_SECOND:
+            if (t2 == INTERVAL_DAY) {
+                return INTERVAL_DAY_TO_SECOND;
+            }
+            if (t2 == INTERVAL_HOUR) {
+                return INTERVAL_HOUR_TO_SECOND;
+            }
+            return INTERVAL_MINUTE_TO_SECOND;
+        case INTERVAL_DAY_TO_HOUR:
+            if (t2 == INTERVAL_MINUTE) {
+                return INTERVAL_DAY_TO_MINUTE;
+            }
+            if (t2 == INTERVAL_SECOND) {
+                return INTERVAL_DAY_TO_SECOND;
+            }
+            break;
+        case INTERVAL_DAY_TO_MINUTE:
+            if (t2 == INTERVAL_SECOND) {
+                return INTERVAL_DAY_TO_SECOND;
+            }
+            break;
+        case INTERVAL_HOUR_TO_MINUTE:
+            switch (t2) {
+            case INTERVAL_DAY:
+            case INTERVAL_DAY_TO_HOUR:
+            case INTERVAL_DAY_TO_MINUTE:
+                return INTERVAL_DAY_TO_MINUTE;
+            case INTERVAL_SECOND:
+                return INTERVAL_HOUR_TO_SECOND;
+            case INTERVAL_DAY_TO_SECOND:
+                return INTERVAL_DAY_TO_SECOND;
+            }
+            break;
+        case INTERVAL_HOUR_TO_SECOND:
+            switch (t2) {
+            case INTERVAL_DAY:
+            case INTERVAL_DAY_TO_HOUR:
+            case INTERVAL_DAY_TO_MINUTE:
+            case INTERVAL_DAY_TO_SECOND:
+                return INTERVAL_DAY_TO_SECOND;
+            }
+            break;
+        case INTERVAL_MINUTE_TO_SECOND:
+            switch (t2) {
+            case INTERVAL_DAY:
+            case INTERVAL_DAY_TO_HOUR:
+            case INTERVAL_DAY_TO_MINUTE:
+            case INTERVAL_DAY_TO_SECOND:
+                return INTERVAL_DAY_TO_SECOND;
+            case INTERVAL_HOUR:
+            case INTERVAL_HOUR_TO_MINUTE:
+            case INTERVAL_HOUR_TO_SECOND:
+                return INTERVAL_HOUR_TO_SECOND;
+            }
+        }
+        return t1;
+    }
+
+    private static int getHigherOther(int t1, int t2, int g2) {
+        switch (t1) {
+        case JAVA_OBJECT:
+            if (g2 != GROUP_BINARY_STRING) {
+                throw getDataTypeCombinationException(t1, t2);
+            }
+            break;
+        case ENUM:
+            if (g2 != GROUP_CHARACTER_STRING && (g2 != GROUP_NUMERIC || t2 > INTEGER)) {
+                throw getDataTypeCombinationException(t1, t2);
+            }
+            break;
+        case GEOMETRY:
+            if (g2 != GROUP_CHARACTER_STRING && g2 != GROUP_BINARY_STRING) {
+                throw getDataTypeCombinationException(t1, t2);
+            }
+            break;
+        case JSON:
+            switch (g2) {
+            case GROUP_DATETIME:
+            case GROUP_INTERVAL_YM:
+            case GROUP_INTERVAL_DT:
+            case GROUP_OTHER:
+                throw getDataTypeCombinationException(t1, t2);
+            }
+            break;
+        case UUID:
+            switch (g2) {
+            case GROUP_CHARACTER_STRING:
+            case GROUP_BINARY_STRING:
+                break;
+            case GROUP_OTHER:
+                if (t2 == JAVA_OBJECT) {
+                    break;
+                }
+                //$FALL-THROUGH$
+            default:
+                throw getDataTypeCombinationException(t1, t2);
+            }
+        }
+        return t1;
+    }
+
+    private static DbException getDataTypeCombinationException(int t1, int t2) {
+        return DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTypeName(t1) + ", " + getTypeName(t2));
     }
 
     /**
@@ -572,44 +767,38 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         softCache = null;
     }
 
-    public boolean getBoolean() {
-        return convertToBoolean().getBoolean();
+    /**
+     * Get the value as a string.
+     *
+     * @return the string
+     */
+    public abstract String getString();
+
+    public Reader getReader() {
+        return new StringReader(getString());
+    }
+
+    /**
+     * Get the reader
+     *
+     * @param oneBasedOffset the offset (1 means no offset)
+     * @param length the requested length
+     * @return the new reader
+     */
+    public Reader getReader(long oneBasedOffset, long length) {
+        String string = getString();
+        long zeroBasedOffset = oneBasedOffset - 1;
+        rangeCheck(zeroBasedOffset, length, string.length());
+        int offset = (int) zeroBasedOffset;
+        return new StringReader(string.substring(offset, offset + (int) length));
     }
 
     public byte[] getBytes() {
-        return convertTo(TypeInfo.TYPE_VARBINARY).getBytes();
+        throw getDataConversionError(VARBINARY);
     }
 
     public byte[] getBytesNoCopy() {
-        return convertTo(TypeInfo.TYPE_VARBINARY).getBytesNoCopy();
-    }
-
-    public byte getByte() {
-        return convertToTinyint(null).getByte();
-    }
-
-    public short getShort() {
-        return convertToSmallint(null).getShort();
-    }
-
-    public BigDecimal getBigDecimal() {
-        return convertTo(TypeInfo.TYPE_NUMERIC).getBigDecimal();
-    }
-
-    public double getDouble() {
-        return convertToDouble().getDouble();
-    }
-
-    public float getFloat() {
-        return convertToReal().getFloat();
-    }
-
-    public int getInt() {
-        return convertToInt(null).getInt();
-    }
-
-    public long getLong() {
-        return convertToBigint(null).getLong();
+        return getBytes();
     }
 
     public InputStream getInputStream() {
@@ -630,23 +819,36 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         return new ByteArrayInputStream(bytes, (int) zeroBasedOffset, (int) length);
     }
 
-    public Reader getReader() {
-        return new StringReader(getString());
+    public boolean getBoolean() {
+        return convertToBoolean().getBoolean();
     }
 
-    /**
-     * Get the reader
-     *
-     * @param oneBasedOffset the offset (1 means no offset)
-     * @param length the requested length
-     * @return the new reader
-     */
-    public Reader getReader(long oneBasedOffset, long length) {
-        String string = getString();
-        long zeroBasedOffset = oneBasedOffset - 1;
-        rangeCheck(zeroBasedOffset, length, string.length());
-        int offset = (int) zeroBasedOffset;
-        return new StringReader(string.substring(offset, offset + (int) length));
+    public byte getByte() {
+        return convertToTinyint(null).getByte();
+    }
+
+    public short getShort() {
+        return convertToSmallint(null).getShort();
+    }
+
+    public int getInt() {
+        return convertToInt(null).getInt();
+    }
+
+    public long getLong() {
+        return convertToBigint(null).getLong();
+    }
+
+    public BigDecimal getBigDecimal() {
+        throw getDataConversionError(NUMERIC);
+    }
+
+    public float getFloat() {
+        throw getDataConversionError(REAL);
+    }
+
+    public double getDouble() {
+        throw getDataConversionError(DOUBLE);
     }
 
     /**
@@ -721,7 +923,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @return the converted value
      */
     public final Value convertTo(int targetType) {
-        return convertTo(TypeInfo.getTypeInfo(targetType), null, CONVERT_TO, null);
+        return convertTo(targetType, null);
     }
 
     /**
@@ -744,7 +946,14 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @return the converted value
      */
     public final Value convertTo(int targetType, CastDataProvider provider) {
-        return convertTo(TypeInfo.getTypeInfo(targetType), provider, CONVERT_TO, null);
+        switch (targetType) {
+        case ARRAY:
+            return convertToAnyArray(provider);
+        case ROW:
+            return convertToAnyRow();
+        default:
+            return convertTo(TypeInfo.getTypeInfo(targetType), provider, CONVERT_TO, null);
+        }
     }
 
     /**
@@ -776,6 +985,32 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      */
     public final Value convertTo(TypeInfo targetType, CastDataProvider provider, Object column) {
         return convertTo(targetType, provider, CONVERT_TO, column);
+    }
+
+    /**
+     * Convert this value to any ARRAY data type.
+     *
+     * @param provider
+     *            the cast information provider
+     * @return a row value
+     */
+    public final ValueArray convertToAnyArray(CastDataProvider provider) {
+        if (getValueType() == Value.ARRAY) {
+            return (ValueArray) this;
+        }
+        return ValueArray.get(new Value[] { this }, provider);
+    }
+
+    /**
+     * Convert this value to any ROW data type.
+     *
+     * @return a row value
+     */
+    public final ValueRow convertToAnyRow() {
+        if (getValueType() == Value.ROW) {
+            return (ValueRow) this;
+        }
+        return ValueRow.get(new Value[] { this });
     }
 
     /**
@@ -822,12 +1057,26 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         int valueType = getValueType(), targetValueType;
         if (valueType == NULL
                 || valueType == (targetValueType = targetType.getValueType()) && conversionMode == CONVERT_TO
-                && targetType.getExtTypeInfo() == null) {
+                && targetType.getExtTypeInfo() == null && valueType != CHAR) {
             return this;
         }
         switch (targetValueType) {
         case NULL:
             return ValueNull.INSTANCE;
+        case CHAR:
+            return convertToChar(targetType, provider, conversionMode, column);
+        case VARCHAR:
+            return convertToVarchar(targetType, provider, conversionMode, column);
+        case CLOB:
+            return convertToClob(targetType, conversionMode, column);
+        case VARCHAR_IGNORECASE:
+            return convertToVarcharIgnoreCase(targetType, conversionMode, column);
+        case BINARY:
+            return convertToBinary(targetType, conversionMode, column);
+        case VARBINARY:
+            return convertToVarbinary(targetType, conversionMode, column);
+        case BLOB:
+            return convertToBlob(targetType, conversionMode, column);
         case BOOLEAN:
             return convertToBoolean();
         case TINYINT:
@@ -840,10 +1089,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             return convertToBigint(column);
         case NUMERIC:
             return convertToNumeric(targetType, provider, conversionMode, column);
-        case DOUBLE:
-            return convertToDouble();
         case REAL:
             return convertToReal();
+        case DOUBLE:
+            return convertToDouble();
+        case DECFLOAT:
+            return convertToDecfloat(targetType, conversionMode);
         case DATE:
             return convertToDate(provider);
         case TIME:
@@ -854,28 +1105,6 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             return convertToTimestamp(targetType, provider, conversionMode);
         case TIMESTAMP_TZ:
             return convertToTimestampTimeZone(targetType, provider, conversionMode);
-        case VARBINARY:
-            return convertToVarbinary(targetType, conversionMode, column);
-        case BINARY:
-            return convertToBinary(targetType, conversionMode, column);
-        case VARCHAR:
-            return ValueVarchar.get(convertToVarchar(targetType, conversionMode, column));
-        case VARCHAR_IGNORECASE:
-            return ValueVarcharIgnoreCase.get(convertToVarchar(targetType, conversionMode, column));
-        case CHAR:
-            return convertToChar(targetType, conversionMode, column);
-        case JAVA_OBJECT:
-            return convertToJavaObject(targetType, conversionMode, column);
-        case ENUM:
-            return convertToEnum((ExtTypeInfoEnum) targetType.getExtTypeInfo());
-        case BLOB:
-            return convertToBlob(targetType, conversionMode, column);
-        case CLOB:
-            return convertToClob(targetType, conversionMode, column);
-        case UUID:
-            return convertToUuid();
-        case GEOMETRY:
-            return convertToGeometry((ExtTypeInfoGeometry) targetType.getExtTypeInfo());
         case INTERVAL_YEAR:
         case INTERVAL_MONTH:
         case INTERVAL_YEAR_TO_MONTH:
@@ -891,17 +1120,244 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case INTERVAL_HOUR_TO_SECOND:
         case INTERVAL_MINUTE_TO_SECOND:
             return convertToIntervalDayTime(targetType, conversionMode, column);
+        case JAVA_OBJECT:
+            return convertToJavaObject(targetType, conversionMode, column);
+        case ENUM:
+            return convertToEnum((ExtTypeInfoEnum) targetType.getExtTypeInfo(), provider);
+        case GEOMETRY:
+            return convertToGeometry((ExtTypeInfoGeometry) targetType.getExtTypeInfo());
         case JSON:
-            return convertToJson();
+            return convertToJson(targetType, conversionMode, column);
+        case UUID:
+            return convertToUuid();
         case ARRAY:
             return convertToArray(targetType, provider, conversionMode, column);
         case ROW:
-            return convertToRow();
-        case RESULT_SET:
-            return convertToResultSet();
+            return convertToRow(targetType, provider, conversionMode, column);
         default:
             throw getDataConversionError(targetValueType);
         }
+    }
+
+    /**
+     * Converts this value to a CHAR value. May not be called on a NULL value.
+     *
+     * @return a CHAR value.
+     */
+    public ValueChar convertToChar() {
+        return convertToChar(TypeInfo.getTypeInfo(CHAR), null, CONVERT_TO, null);
+    }
+
+    private ValueChar convertToChar(TypeInfo targetType, CastDataProvider provider, int conversionMode, //
+            Object column) {
+        int valueType = getValueType();
+        switch (valueType) {
+        case BLOB:
+        case JAVA_OBJECT:
+            throw getDataConversionError(targetType.getValueType());
+        }
+        String s = getString();
+        int length = s.length(), newLength = length;
+        if (conversionMode == CONVERT_TO) {
+            while (newLength > 0 && s.charAt(newLength - 1) == ' ') {
+                newLength--;
+            }
+        } else {
+            int p = MathUtils.convertLongToInt(targetType.getPrecision());
+            if (provider == null || provider.getMode().charPadding == CharPadding.ALWAYS) {
+                if (newLength != p) {
+                    if (newLength < p) {
+                        return ValueChar.get(StringUtils.pad(s, p, null, true));
+                    } else if (conversionMode == CAST_TO) {
+                        newLength = p;
+                    } else {
+                        do {
+                            if (s.charAt(--newLength) != ' ') {
+                                throw getValueTooLongException(targetType, column);
+                            }
+                        } while (newLength > p);
+                    }
+                }
+            } else {
+                if (conversionMode == CAST_TO && newLength > p) {
+                    newLength = p;
+                }
+                while (newLength > 0 && s.charAt(newLength - 1) == ' ') {
+                    newLength--;
+                }
+                if (conversionMode == ASSIGN_TO && newLength > p) {
+                    throw getValueTooLongException(targetType, column);
+                }
+            }
+        }
+        if (length != newLength) {
+            s = s.substring(0, newLength);
+        } else if (valueType == CHAR) {
+            return (ValueChar) this;
+        }
+        return ValueChar.get(s);
+    }
+
+    private Value convertToVarchar(TypeInfo targetType, CastDataProvider provider, int conversionMode, Object column) {
+        int valueType = getValueType();
+        switch (valueType) {
+        case BLOB:
+        case JAVA_OBJECT:
+            throw getDataConversionError(targetType.getValueType());
+        }
+        if (conversionMode != CONVERT_TO) {
+            String s = getString();
+            int p = MathUtils.convertLongToInt(targetType.getPrecision());
+            if (s.length() > p) {
+                if (conversionMode != CAST_TO) {
+                    throw getValueTooLongException(targetType, column);
+                }
+                return ValueVarchar.get(s.substring(0, p), provider);
+            }
+        }
+        return valueType == Value.VARCHAR ? this : ValueVarchar.get(getString(), provider);
+    }
+
+    private ValueLob convertToClob(TypeInfo targetType, int conversionMode, Object column) {
+        ValueLob v;
+        switch (getValueType()) {
+        case CLOB:
+            v = (ValueLob) this;
+            break;
+        case JAVA_OBJECT:
+            throw getDataConversionError(targetType.getValueType());
+        case BLOB: {
+            v = (ValueLob) this;
+            // Try to reuse the array, if possible
+            if (v instanceof ValueLobInMemory) {
+                byte[] small = ((ValueLobInMemory)v).getSmall();
+                byte[] bytes = new String(small, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
+                if (Arrays.equals(bytes, small)) {
+                    bytes = small;
+                }
+                v = ValueLobInMemory.createSmallLob(CLOB, bytes);
+                break;
+            } else if (v instanceof ValueLobDatabase) {
+                v = ((ValueLobDatabase) v).getDataHandler().getLobStorage().createClob(v.getReader(), -1);
+                break;
+            }
+        }
+        //$FALL-THROUGH$
+        default:
+            v = ValueLobInMemory.createSmallLob(CLOB, getString().getBytes(StandardCharsets.UTF_8));
+        }
+        if (conversionMode != CONVERT_TO) {
+            if (conversionMode == CAST_TO) {
+                v = v.convertPrecision(targetType.getPrecision());
+            } else if (v.getPrecision() > targetType.getPrecision()) {
+                throw v.getValueTooLongException(targetType, column);
+            }
+        }
+        return v;
+    }
+
+    private Value convertToVarcharIgnoreCase(TypeInfo targetType, int conversionMode, Object column) {
+        int valueType = getValueType();
+        switch (valueType) {
+        case BLOB:
+        case JAVA_OBJECT:
+            throw getDataConversionError(targetType.getValueType());
+        }
+        if (conversionMode != CONVERT_TO) {
+            String s = getString();
+            int p = MathUtils.convertLongToInt(targetType.getPrecision());
+            if (s.length() > p) {
+                if (conversionMode != CAST_TO) {
+                    throw getValueTooLongException(targetType, column);
+                }
+                return ValueVarcharIgnoreCase.get(s.substring(0, p));
+            }
+        }
+        return valueType == Value.VARCHAR_IGNORECASE ? this : ValueVarcharIgnoreCase.get(getString());
+    }
+
+    private ValueBinary convertToBinary(TypeInfo targetType, int conversionMode, Object column) {
+        ValueBinary v;
+        if (getValueType() == BINARY) {
+            v = (ValueBinary) this;
+        } else {
+            try {
+                v = ValueBinary.getNoCopy(getBytesNoCopy());
+            } catch (DbException e) {
+                if (e.getErrorCode() == ErrorCode.DATA_CONVERSION_ERROR_1) {
+                    throw getDataConversionError(BINARY);
+                }
+                throw e;
+            }
+        }
+        if (conversionMode != CONVERT_TO) {
+            byte[] value = v.getBytesNoCopy();
+            int length = value.length;
+            int p = MathUtils.convertLongToInt(targetType.getPrecision());
+            if (length != p) {
+                if (conversionMode == ASSIGN_TO && length > p) {
+                    throw v.getValueTooLongException(targetType, column);
+                }
+                v = ValueBinary.getNoCopy(Arrays.copyOf(value, p));
+            }
+        }
+        return v;
+    }
+
+    private ValueVarbinary convertToVarbinary(TypeInfo targetType, int conversionMode, Object column) {
+        ValueVarbinary v;
+        if (getValueType() == VARBINARY) {
+            v = (ValueVarbinary) this;
+        } else {
+            v = ValueVarbinary.getNoCopy(getBytesNoCopy());
+        }
+        if (conversionMode != CONVERT_TO) {
+            byte[] value = v.getBytesNoCopy();
+            int length = value.length;
+            int p = MathUtils.convertLongToInt(targetType.getPrecision());
+            if (conversionMode == CAST_TO) {
+                if (length > p) {
+                    v = ValueVarbinary.getNoCopy(Arrays.copyOf(value, p));
+                }
+            } else if (length > p) {
+                throw v.getValueTooLongException(targetType, column);
+            }
+        }
+        return v;
+    }
+
+    private ValueLob convertToBlob(TypeInfo targetType, int conversionMode, Object column) {
+        ValueLob v;
+        switch (getValueType()) {
+        case BLOB:
+            v = (ValueLob) this;
+            break;
+        case CLOB:
+            DataHandler handler = ((ValueLob) this).getDataHandler();
+            if (handler != null) {
+                v = handler.getLobStorage().createBlob(getInputStream(), -1);
+                break;
+            }
+            //$FALL-THROUGH$
+        default:
+            try {
+                v = ValueLobInMemory.createSmallLob(BLOB, getBytesNoCopy());
+            } catch (DbException e) {
+                if (e.getErrorCode() == ErrorCode.DATA_CONVERSION_ERROR_1) {
+                    throw getDataConversionError(BLOB);
+                }
+                throw e;
+            }
+            break;
+        }
+        if (conversionMode != CONVERT_TO) {
+            if (conversionMode == CAST_TO) {
+                v = v.convertPrecision(targetType.getPrecision());
+            } else if (v.getPrecision() > targetType.getPrecision()) {
+                throw v.getValueTooLongException(targetType, column);
+            }
+        }
+        return v;
     }
 
     /**
@@ -914,6 +1370,10 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         switch (getValueType()) {
         case BOOLEAN:
             return (ValueBoolean) this;
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
+            return ValueBoolean.get(getBoolean());
         case TINYINT:
         case SMALLINT:
         case INTEGER:
@@ -921,28 +1381,8 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case NUMERIC:
         case DOUBLE:
         case REAL:
+        case DECFLOAT:
             return ValueBoolean.get(getSignum() != 0);
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            if (s.equalsIgnoreCase("true") || s.equalsIgnoreCase("t") || s.equalsIgnoreCase("yes")
-                    || s.equalsIgnoreCase("y")) {
-                return ValueBoolean.TRUE;
-            } else if (s.equalsIgnoreCase("false") || s.equalsIgnoreCase("f") || s.equalsIgnoreCase("no")
-                    || s.equalsIgnoreCase("n")) {
-                return ValueBoolean.FALSE;
-            } else {
-                try {
-                    // convert to a number, and if it is not 0 then it is true
-                    return ValueBoolean.get(new BigDecimal(s).signum() != 0);
-                } catch (NumberFormatException e) {
-                    // Hide this custom exception, it is meaningless for
-                    // conversion to BOOLEAN
-                }
-            }
-        }
-        //$FALL-THROUGH$
         default:
             throw getDataConversionError(BOOLEAN);
         case NULL:
@@ -963,8 +1403,11 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         switch (getValueType()) {
         case TINYINT:
             return (ValueTinyint) this;
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
         case BOOLEAN:
-            return ValueTinyint.get(getBoolean() ? (byte) 1 : (byte) 0);
+            return ValueTinyint.get(getByte());
         case SMALLINT:
         case ENUM:
         case INTEGER:
@@ -985,20 +1428,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case INTERVAL_MINUTE_TO_SECOND:
             return ValueTinyint.get(convertToByte(getLong(), column));
         case NUMERIC:
+        case DECFLOAT:
             return ValueTinyint.get(convertToByte(convertToLong(getBigDecimal(), column), column));
         case REAL:
         case DOUBLE:
             return ValueTinyint.get(convertToByte(convertToLong(getDouble(), column), column));
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueTinyint.get(Byte.parseByte(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
+        case BINARY:
         case VARBINARY: {
             byte[] bytes = getBytesNoCopy();
             if (bytes.length == 1) {
@@ -1025,10 +1460,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         switch (getValueType()) {
         case SMALLINT:
             return (ValueSmallint) this;
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
         case BOOLEAN:
-            return ValueSmallint.get(getBoolean() ? (short) 1 : (short) 0);
         case TINYINT:
-            return ValueSmallint.get(getByte());
+            return ValueSmallint.get(getShort());
         case ENUM:
         case INTEGER:
             return ValueSmallint.get(convertToShort(getInt(), column));
@@ -1048,20 +1485,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case INTERVAL_MINUTE_TO_SECOND:
             return ValueSmallint.get(convertToShort(getLong(), column));
         case NUMERIC:
+        case DECFLOAT:
             return ValueSmallint.get(convertToShort(convertToLong(getBigDecimal(), column), column));
         case REAL:
         case DOUBLE:
             return ValueSmallint.get(convertToShort(convertToLong(getDouble(), column), column));
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueSmallint.get(Short.parseShort(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
+        case BINARY:
         case VARBINARY: {
             byte[] bytes = getBytesNoCopy();
             if (bytes.length == 2) {
@@ -1088,8 +1517,10 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         switch (getValueType()) {
         case INTEGER:
             return (ValueInteger) this;
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
         case BOOLEAN:
-            return ValueInteger.get(getBoolean() ? 1 : 0);
         case TINYINT:
         case ENUM:
         case SMALLINT:
@@ -1110,20 +1541,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case INTERVAL_MINUTE_TO_SECOND:
             return ValueInteger.get(convertToInt(getLong(), column));
         case NUMERIC:
+        case DECFLOAT:
             return ValueInteger.get(convertToInt(convertToLong(getBigDecimal(), column), column));
         case REAL:
         case DOUBLE:
             return ValueInteger.get(convertToInt(convertToLong(getDouble(), column), column));
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueInteger.get(Integer.parseInt(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
+        case BINARY:
         case VARBINARY: {
             byte[] bytes = getBytesNoCopy();
             if (bytes.length == 4) {
@@ -1150,11 +1573,12 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         switch (getValueType()) {
         case BIGINT:
             return (ValueBigint) this;
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
         case BOOLEAN:
-            return ValueBigint.get(getBoolean() ? 1 : 0);
         case TINYINT:
         case SMALLINT:
-        case ENUM:
         case INTEGER:
         case INTERVAL_YEAR:
         case INTERVAL_MONTH:
@@ -1169,22 +1593,15 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case INTERVAL_HOUR_TO_MINUTE:
         case INTERVAL_HOUR_TO_SECOND:
         case INTERVAL_MINUTE_TO_SECOND:
-            return ValueBigint.get(getInt());
+        case ENUM:
+            return ValueBigint.get(getLong());
         case NUMERIC:
+        case DECFLOAT:
             return ValueBigint.get(convertToLong(getBigDecimal(), column));
         case REAL:
         case DOUBLE:
             return ValueBigint.get(convertToLong(getDouble(), column));
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueBigint.get(Long.parseLong(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
+        case BINARY:
         case VARBINARY: {
             byte[] bytes = getBytesNoCopy();
             if (bytes.length == 8) {
@@ -1209,45 +1626,11 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         case BOOLEAN:
             v = getBoolean() ? ValueNumeric.ONE : ValueNumeric.ZERO;
             break;
-        case TINYINT:
-        case SMALLINT:
-        case ENUM:
-        case INTEGER:
-            v =  ValueNumeric.get(BigDecimal.valueOf(getInt()));
-            break;
-        case BIGINT:
-            v = ValueNumeric.get(BigDecimal.valueOf(getLong()));
-            break;
-        case DOUBLE:
-        case REAL:
-        case INTERVAL_YEAR:
-        case INTERVAL_MONTH:
-        case INTERVAL_DAY:
-        case INTERVAL_HOUR:
-        case INTERVAL_MINUTE:
-        case INTERVAL_SECOND:
-        case INTERVAL_YEAR_TO_MONTH:
-        case INTERVAL_DAY_TO_HOUR:
-        case INTERVAL_DAY_TO_MINUTE:
-        case INTERVAL_DAY_TO_SECOND:
-        case INTERVAL_HOUR_TO_MINUTE:
-        case INTERVAL_HOUR_TO_SECOND:
-        case INTERVAL_MINUTE_TO_SECOND:
+        default:
             v = ValueNumeric.get(getBigDecimal());
             break;
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                v = ValueNumeric.get(new BigDecimal(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-            break;
-        }
-        default:
-            throw getDataConversionError(NUMERIC);
+        case NULL:
+            throw DbException.throwInternalError();
         }
         if (conversionMode != CONVERT_TO) {
             int targetScale = targetType.getScale();
@@ -1264,57 +1647,6 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
     }
 
     /**
-     * Converts this value to a DOUBLE value. May not be called on a NULL value.
-     *
-     * @return the DOUBLE value
-     */
-    public final ValueDouble convertToDouble() {
-        switch (getValueType()) {
-        case DOUBLE:
-            return (ValueDouble) this;
-        case BOOLEAN:
-            return getBoolean() ? ValueDouble.ONE : ValueDouble.ZERO;
-        case TINYINT:
-        case SMALLINT:
-        case INTEGER:
-            return ValueDouble.get(getInt());
-        case BIGINT:
-        case INTERVAL_YEAR:
-        case INTERVAL_MONTH:
-        case INTERVAL_DAY:
-        case INTERVAL_HOUR:
-        case INTERVAL_MINUTE:
-            return ValueDouble.get(getLong());
-        case NUMERIC:
-        case INTERVAL_SECOND:
-        case INTERVAL_YEAR_TO_MONTH:
-        case INTERVAL_DAY_TO_HOUR:
-        case INTERVAL_DAY_TO_MINUTE:
-        case INTERVAL_DAY_TO_SECOND:
-        case INTERVAL_HOUR_TO_MINUTE:
-        case INTERVAL_HOUR_TO_SECOND:
-        case INTERVAL_MINUTE_TO_SECOND:
-            return ValueDouble.get(getBigDecimal().doubleValue());
-        case REAL:
-            return ValueDouble.get(getFloat());
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueDouble.get(Double.parseDouble(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
-        default:
-            throw getDataConversionError(DOUBLE);
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-    }
-
-    /**
      * Converts this value to a REAL value. May not be called on a NULL value.
      *
      * @return the REAL value
@@ -1325,44 +1657,61 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             return (ValueReal) this;
         case BOOLEAN:
             return getBoolean() ? ValueReal.ONE : ValueReal.ZERO;
-        case TINYINT:
-        case SMALLINT:
-        case INTEGER:
-            return ValueReal.get(getInt());
-        case BIGINT:
-        case INTERVAL_YEAR:
-        case INTERVAL_MONTH:
-        case INTERVAL_DAY:
-        case INTERVAL_HOUR:
-        case INTERVAL_MINUTE:
-            return ValueReal.get(getLong());
-        case NUMERIC:
-        case INTERVAL_SECOND:
-        case INTERVAL_YEAR_TO_MONTH:
-        case INTERVAL_DAY_TO_HOUR:
-        case INTERVAL_DAY_TO_MINUTE:
-        case INTERVAL_DAY_TO_SECOND:
-        case INTERVAL_HOUR_TO_MINUTE:
-        case INTERVAL_HOUR_TO_SECOND:
-        case INTERVAL_MINUTE_TO_SECOND:
-            return ValueReal.get(getBigDecimal().floatValue());
-        case DOUBLE:
-            return ValueReal.get((float) getDouble());
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR: {
-            String s = getString();
-            try {
-                return ValueReal.get(Float.parseFloat(s.trim()));
-            } catch (NumberFormatException e) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, e, s);
-            }
-        }
         default:
-            throw getDataConversionError(REAL);
+            return ValueReal.get(getFloat());
         case NULL:
             throw DbException.throwInternalError();
         }
+    }
+
+    /**
+     * Converts this value to a DOUBLE value. May not be called on a NULL value.
+     *
+     * @return the DOUBLE value
+     */
+    public final ValueDouble convertToDouble() {
+        switch (getValueType()) {
+        case DOUBLE:
+            return (ValueDouble) this;
+        case BOOLEAN:
+            return getBoolean() ? ValueDouble.ONE : ValueDouble.ZERO;
+        default:
+            return ValueDouble.get(getDouble());
+        case NULL:
+            throw DbException.throwInternalError();
+        }
+    }
+
+    private ValueDecfloat convertToDecfloat(TypeInfo targetType, int conversionMode) {
+        ValueDecfloat v;
+        switch (getValueType()) {
+        case DECFLOAT:
+            v = (ValueDecfloat) this;
+            break;
+        case BOOLEAN:
+            v = getBoolean() ? ValueDecfloat.ONE : ValueDecfloat.ZERO;
+            break;
+        default:
+            try {
+                v = ValueDecfloat.get(getBigDecimal());
+            } catch (DbException e) {
+                if (e.getErrorCode() == ErrorCode.DATA_CONVERSION_ERROR_1) {
+                    throw getDataConversionError(DECFLOAT);
+                }
+                throw e;
+            }
+            break;
+        case NULL:
+            throw DbException.throwInternalError();
+        }
+        if (conversionMode != CONVERT_TO) {
+            BigDecimal bd = v.getBigDecimal();
+            int precision = bd.precision(), targetPrecision = (int) targetType.getPrecision();
+            if (precision > targetPrecision) {
+                v = ValueDecfloat.get(bd.setScale(bd.scale() - precision + targetPrecision, RoundingMode.HALF_UP));
+            }
+        }
+        return v;
     }
 
     /**
@@ -1607,388 +1956,6 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         return v;
     }
 
-    private ValueVarbinary convertToVarbinary(TypeInfo targetType, int conversionMode, Object column) {
-        ValueVarbinary v;
-        switch (getValueType()) {
-        case VARBINARY:
-            v = (ValueVarbinary) this;
-            break;
-        case BINARY:
-        case JAVA_OBJECT:
-        case BLOB:
-        case GEOMETRY:
-        case JSON:
-            v = ValueVarbinary.getNoCopy(getBytesNoCopy());
-            break;
-        case UUID:
-            v = ValueVarbinary.getNoCopy(getBytes());
-            break;
-        case TINYINT:
-            v = ValueVarbinary.getNoCopy(new byte[] { getByte() });
-            break;
-        case SMALLINT: {
-            int x = getShort();
-            v = ValueVarbinary.getNoCopy(new byte[] { (byte) (x >> 8), (byte) x });
-            break;
-        }
-        case INTEGER: {
-            byte[] b = new byte[4];
-            Bits.writeInt(b, 0, getInt());
-            v = ValueVarbinary.getNoCopy(b);
-            break;
-        }
-        case BIGINT: {
-            byte[] b = new byte[8];
-            Bits.writeLong(b, 0, getLong());
-            v = ValueVarbinary.getNoCopy(b);
-            break;
-        }
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            v = ValueVarbinary.getNoCopy(getString().getBytes(StandardCharsets.UTF_8));
-            break;
-        default:
-            throw getDataConversionError(VARBINARY);
-        }
-        if (conversionMode != CONVERT_TO) {
-            byte[] value = v.getBytesNoCopy();
-            int length = value.length;
-            int p = MathUtils.convertLongToInt(targetType.getPrecision());
-            if (conversionMode == CAST_TO) {
-                if (length > p) {
-                    v = ValueVarbinary.getNoCopy(Arrays.copyOf(value, p));
-                }
-            } else if (length > p) {
-                throw v.getValueTooLongException(targetType, column);
-            }
-        }
-        return v;
-    }
-
-    private ValueBinary convertToBinary(TypeInfo targetType, int conversionMode, Object column) {
-        ValueBinary v;
-        switch (getValueType()) {
-        case BINARY:
-            v = (ValueBinary) this;
-            break;
-        case VARBINARY:
-        case JAVA_OBJECT:
-        case BLOB:
-        case GEOMETRY:
-        case JSON:
-            v = ValueBinary.getNoCopy(getBytesNoCopy());
-            break;
-        case UUID:
-            v = ValueBinary.getNoCopy(getBytes());
-            break;
-        case TINYINT:
-            v = ValueBinary.getNoCopy(new byte[] { getByte() });
-            break;
-        case SMALLINT: {
-            int x = getShort();
-            v = ValueBinary.getNoCopy(new byte[] { (byte) (x >> 8), (byte) x });
-            break;
-        }
-        case INTEGER: {
-            byte[] b = new byte[4];
-            Bits.writeInt(b, 0, getInt());
-            v = ValueBinary.getNoCopy(b);
-            break;
-        }
-        case BIGINT: {
-            byte[] b = new byte[8];
-            Bits.writeLong(b, 0, getLong());
-            v = ValueBinary.getNoCopy(b);
-            break;
-        }
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            v = ValueBinary.getNoCopy(getString().getBytes(StandardCharsets.UTF_8));
-            break;
-        default:
-            throw getDataConversionError(VARBINARY);
-        }
-        if (conversionMode != CONVERT_TO) {
-            byte[] value = v.getBytesNoCopy();
-            int length = value.length;
-            int p = MathUtils.convertLongToInt(targetType.getPrecision());
-            if (length != p) {
-                if (conversionMode == ASSIGN_TO && length > p) {
-                    throw v.getValueTooLongException(targetType, column);
-                }
-                v = ValueBinary.getNoCopy(Arrays.copyOf(value, p));
-            }
-        }
-        return v;
-    }
-
-    private String convertToVarchar(TypeInfo targetType, int conversionMode, Object column) {
-        switch (getValueType()) {
-        case BLOB:
-        case JAVA_OBJECT:
-            throw getDataConversionError(targetType.getValueType());
-        }
-        String s = getString();
-        if (conversionMode != CONVERT_TO) {
-            int p = MathUtils.convertLongToInt(targetType.getPrecision());
-            if (s.length() > p) {
-                if (conversionMode != CAST_TO) {
-                    throw getValueTooLongException(targetType, column);
-                }
-                s = s.substring(0, p);
-            }
-        }
-        return s;
-    }
-
-    private ValueChar convertToChar(TypeInfo targetType, int conversionMode, Object column) {
-        switch (getValueType()) {
-        case BLOB:
-        case JAVA_OBJECT:
-            throw getDataConversionError(targetType.getValueType());
-        }
-        String s = getString();
-        int p = MathUtils.convertLongToInt(targetType.getPrecision()), l = s.length();
-        if (conversionMode == CAST_TO && l > p) {
-            l = p;
-        }
-        while (l > 0 && s.charAt(l - 1) == ' ') {
-            l--;
-        }
-        if (conversionMode == ASSIGN_TO && l > p) {
-            throw getValueTooLongException(targetType, column);
-        }
-        return ValueChar.get(s.substring(0, l));
-    }
-
-    /**
-     * Converts this value to a JAVA_OBJECT value. May not be called on a NULL
-     * value.
-     *
-     * @param targetType
-     *            the type of the returned value
-     * @param conversionMode
-     *            conversion mode
-     * @param column
-     *            the column (if any), used to improve the error message if
-     *            conversion fails
-     * @return the JAVA_OBJECT value
-     */
-    public final ValueJavaObject convertToJavaObject(TypeInfo targetType, int conversionMode, Object column) {
-        ValueJavaObject v;
-        switch (getValueType()) {
-        case JAVA_OBJECT:
-            v = (ValueJavaObject) this;
-            break;
-        case VARBINARY:
-            v = ValueJavaObject.getNoCopy(getBytesNoCopy());
-            break;
-        default:
-            throw getDataConversionError(JAVA_OBJECT);
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-        if (conversionMode != CONVERT_TO && v.getBytesNoCopy().length > targetType.getPrecision()) {
-            throw v.getValueTooLongException(targetType, column);
-        }
-        return v;
-    }
-
-    /**
-     * Converts this value to an ENUM value. May not be called on a NULL value.
-     *
-     * @param extTypeInfo
-     *            the extended data type information
-     * @return the ENUM value
-     */
-    public final ValueEnum convertToEnum(ExtTypeInfoEnum extTypeInfo) {
-        switch (getValueType()) {
-        case ENUM: {
-            ValueEnum v = (ValueEnum) this;
-            if (extTypeInfo.equals(v.getEnumerators())) {
-                return v;
-            }
-            return extTypeInfo.getValue(v.getString());
-        }
-        case TINYINT:
-        case SMALLINT:
-        case INTEGER:
-        case BIGINT:
-        case NUMERIC:
-            return extTypeInfo.getValue(getInt());
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            return extTypeInfo.getValue(getString());
-        default:
-            throw getDataConversionError(ENUM);
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-    }
-
-    private ValueLob convertToBlob(TypeInfo targetType, int conversionMode, Object column) {
-        ValueLob v;
-        switch (getValueType()) {
-        case BLOB:
-            v = (ValueLob) this;
-            break;
-        case CLOB: {
-            v = (ValueLob) this;
-            DataHandler handler = v.getDataHandler();
-            if (handler != null) {
-                v = handler.getLobStorage().createBlob(v.getInputStream(), -1);
-            } else {
-                v = ValueLob.createSmallLob(BLOB, v.getBytesNoCopy());
-            }
-            break;
-        }
-        case VARBINARY:
-        case GEOMETRY:
-        case JSON:
-            v = ValueLob.createSmallLob(BLOB, getBytesNoCopy());
-            break;
-        case UUID:
-            v = ValueLob.createSmallLob(BLOB, getBytes());
-            break;
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            v = ValueLob.createSmallLob(BLOB, getString().getBytes(StandardCharsets.UTF_8));
-            break;
-        default:
-            throw getDataConversionError(BLOB);
-        }
-        if (conversionMode != CONVERT_TO) {
-            if (conversionMode == CAST_TO) {
-                v = v.convertPrecision(targetType.getPrecision());
-            } else if (v.getPrecision() > targetType.getPrecision()) {
-                throw v.getValueTooLongException(targetType, column);
-            }
-        }
-        return v;
-    }
-
-    private ValueLob convertToClob(TypeInfo targetType, int conversionMode, Object column) {
-        ValueLob v;
-        switch (getValueType()) {
-        case CLOB:
-            v = (ValueLob) this;
-            break;
-        case JAVA_OBJECT:
-            throw getDataConversionError(targetType.getValueType());
-        case BLOB: {
-            v = (ValueLob) this;
-            DataHandler handler = v.getDataHandler();
-            if (handler != null) {
-                v = handler.getLobStorage().createClob(v.getReader(), -1);
-                break;
-            }
-            // Try to reuse the array, if possible
-            byte[] small = v.getSmall();
-            if (small != null) {
-                byte[] bytes = new String(small, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
-                if (Arrays.equals(bytes, small)) {
-                    bytes = small;
-                }
-                v = ValueLob.createSmallLob(CLOB, bytes);
-                break;
-            }
-        }
-        //$FALL-THROUGH$
-        default:
-            v = ValueLob.createSmallLob(CLOB, getString().getBytes(StandardCharsets.UTF_8));
-        }
-        if (conversionMode != CONVERT_TO) {
-            if (conversionMode == CAST_TO) {
-                v = v.convertPrecision(targetType.getPrecision());
-            } else if (v.getPrecision() > targetType.getPrecision()) {
-                throw v.getValueTooLongException(targetType, column);
-            }
-        }
-        return v;
-    }
-
-    /**
-     * Converts this value to a UUID value. May not be called on a NULL value.
-     *
-     * @return the UUID value
-     */
-    public final ValueUuid convertToUuid() {
-        switch (getValueType()) {
-        case UUID:
-            return (ValueUuid) this;
-        case VARBINARY:
-            return ValueUuid.get(getBytesNoCopy());
-        case JAVA_OBJECT:
-            return JdbcUtils.deserializeUuid(getBytesNoCopy());
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            return ValueUuid.get(getString());
-        default:
-            throw getDataConversionError(UUID);
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-    }
-
-    /**
-     * Converts this value to a GEOMETRY value. May not be called on a NULL
-     * value.
-     *
-     * @param extTypeInfo
-     *            the extended data type information, or null
-     * @return the GEOMETRY value
-     */
-    public final ValueGeometry<?> convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
-        ValueGeometry<?> result;
-        switch (getValueType()) {
-        case GEOMETRY:
-            result = (ValueGeometry<?>) this;
-            break;
-        case VARBINARY:
-            result = GEOMETRY_FACTORY.get(getBytesNoCopy());
-            break;
-        case JSON: {
-            int srid = 0;
-            if (extTypeInfo != null) {
-                Integer s = extTypeInfo.getSrid();
-                if (s != null) {
-                    srid = s;
-                }
-            }
-            try {
-                result = GEOMETRY_FACTORY.get(GeoJsonUtils.geoJsonToEwkb(getBytesNoCopy(), srid));
-            } catch (RuntimeException ex) {
-                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTraceSQL());
-            }
-            break;
-        }
-        case VARCHAR:
-        case VARCHAR_IGNORECASE:
-        case CHAR:
-            result = GEOMETRY_FACTORY.get(getString());
-            break;
-        default:
-            throw getDataConversionError(GEOMETRY);
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-        if (extTypeInfo != null) {
-            int type = extTypeInfo.getType();
-            Integer srid = extTypeInfo.getSrid();
-            if (type != 0 && result.getTypeAndDimensionSystem() != type || srid != null && result.getSRID() != srid) {
-                throw DbException.get(ErrorCode.CHECK_CONSTRAINT_VIOLATED_1,
-                        ExtTypeInfoGeometry.toSQL(result.getTypeAndDimensionSystem(), result.getSRID())
-                                + " <> " + extTypeInfo.toString());
-            }
-        }
-        return result;
-    }
-
     private ValueInterval convertToIntervalYearMonth(TypeInfo targetType, int conversionMode, Object column) {
         ValueInterval v = convertToIntervalYearMonth(targetType.getValueType(), column);
         if (conversionMode != CONVERT_TO) {
@@ -2019,6 +1986,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             leading = convertToLong(getDouble(), column);
             break;
         case NUMERIC:
+        case DECFLOAT:
             if (targetType == INTERVAL_YEAR_TO_MONTH) {
                 return IntervalUtils.intervalFromAbsolute(IntervalQualifier.YEAR_TO_MONTH, getBigDecimal()
                         .multiply(BigDecimal.valueOf(12)).setScale(0, RoundingMode.HALF_UP).toBigInteger());
@@ -2081,6 +2049,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             leading = convertToLong(getDouble(), column);
             break;
         case NUMERIC:
+        case DECFLOAT:
             if (targetType > INTERVAL_MINUTE) {
                 return convertToIntervalDayTime(getBigDecimal(), targetType);
             }
@@ -2147,40 +2116,212 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
                 bigDecimal.multiply(BigDecimal.valueOf(multiplier)).setScale(0, RoundingMode.HALF_UP).toBigInteger());
     }
 
-    private Value convertToJson() {
+    /**
+     * Converts this value to a JAVA_OBJECT value. May not be called on a NULL
+     * value.
+     *
+     * @param targetType
+     *            the type of the returned value
+     * @param conversionMode
+     *            conversion mode
+     * @param column
+     *            the column (if any), used to improve the error message if
+     *            conversion fails
+     * @return the JAVA_OBJECT value
+     */
+    public final ValueJavaObject convertToJavaObject(TypeInfo targetType, int conversionMode, Object column) {
+        ValueJavaObject v;
         switch (getValueType()) {
-        case JSON:
-            return this;
-        case BOOLEAN:
-            return ValueJson.get(getBoolean());
+        case JAVA_OBJECT:
+            v = (ValueJavaObject) this;
+            break;
+        case BINARY:
+        case VARBINARY:
+        case BLOB:
+            v = ValueJavaObject.getNoCopy(getBytesNoCopy());
+            break;
+        default:
+            throw getDataConversionError(JAVA_OBJECT);
+        case NULL:
+            throw DbException.throwInternalError();
+        }
+        if (conversionMode != CONVERT_TO && v.getBytesNoCopy().length > targetType.getPrecision()) {
+            throw v.getValueTooLongException(targetType, column);
+        }
+        return v;
+    }
+
+    /**
+     * Converts this value to an ENUM value. May not be called on a NULL value.
+     *
+     * @param extTypeInfo
+     *            the extended data type information
+     * @param provider
+     *            the cast information provider
+     * @return the ENUM value
+     */
+    public final ValueEnum convertToEnum(ExtTypeInfoEnum extTypeInfo, CastDataProvider provider) {
+        switch (getValueType()) {
+        case ENUM: {
+            ValueEnum v = (ValueEnum) this;
+            if (extTypeInfo.equals(v.getEnumerators())) {
+                return v;
+            }
+            return extTypeInfo.getValue(v.getString(), provider);
+        }
         case TINYINT:
         case SMALLINT:
         case INTEGER:
-            return ValueJson.get(getInt());
         case BIGINT:
-            return ValueJson.get(getLong());
-        case REAL:
-        case DOUBLE:
         case NUMERIC:
-            return ValueJson.get(getBigDecimal());
-        case VARBINARY:
-            return ValueJson.fromJson(getBytesNoCopy());
+        case DECFLOAT:
+            return extTypeInfo.getValue(getInt(), provider);
         case VARCHAR:
         case VARCHAR_IGNORECASE:
         case CHAR:
-            return ValueJson.get(getString());
+            return extTypeInfo.getValue(getString(), provider);
+        default:
+            throw getDataConversionError(ENUM);
+        case NULL:
+            throw DbException.throwInternalError();
+        }
+    }
+
+    /**
+     * Converts this value to a GEOMETRY value. May not be called on a NULL
+     * value.
+     *
+     * @param extTypeInfo
+     *            the extended data type information, or null
+     * @return the GEOMETRY value
+     */
+    public final ValueGeometry<?> convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
+        ValueGeometry<?> result;
+        switch (getValueType()) {
+        case GEOMETRY:
+            result = (ValueGeometry<?>) this;
+            break;
+        case BINARY:
+        case VARBINARY:
+        case BLOB:
+            result = Value.getGeometryFactory().getFromEWKB(getBytesNoCopy());
+            break;
+        case JSON: {
+            int srid = 0;
+            if (extTypeInfo != null) {
+                Integer s = extTypeInfo.getSrid();
+                if (s != null) {
+                    srid = s;
+                }
+            }
+            try {
+                result = Value.getGeometryFactory().get(GeoJsonUtils.geoJsonToEwkb(getBytesNoCopy(), srid));
+            } catch (RuntimeException ex) {
+                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTraceSQL());
+            }
+            break;
+        }
+        case CHAR:
+        case VARCHAR:
+        case CLOB:
+        case VARCHAR_IGNORECASE:
+            result = Value.getGeometryFactory().get(getString());
+            break;
+        default:
+            throw getDataConversionError(GEOMETRY);
+        case NULL:
+            throw DbException.throwInternalError();
+        }
+        if (extTypeInfo != null) {
+            int type = extTypeInfo.getType();
+            Integer srid = extTypeInfo.getSrid();
+            if (type != 0 && result.getTypeAndDimensionSystem() != type || srid != null && result.getSRID() != srid) {
+                StringBuilder builder = ExtTypeInfoGeometry
+                        .toSQL(new StringBuilder(), result.getTypeAndDimensionSystem(), result.getSRID())
+                        .append(" -> ");
+                extTypeInfo.getSQL(builder, TRACE_SQL_FLAGS);
+                throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, builder.toString());
+            }
+        }
+        return result;
+    }
+
+    private ValueJson convertToJson(TypeInfo targetType, int conversionMode, Object column) {
+        ValueJson v;
+        switch (getValueType()) {
+        case JSON:
+            v = (ValueJson) this;
+            break;
+        case BOOLEAN:
+            v = ValueJson.get(getBoolean());
+            break;
+        case TINYINT:
+        case SMALLINT:
+        case INTEGER:
+            v = ValueJson.get(getInt());
+            break;
+        case BIGINT:
+            v = ValueJson.get(getLong());
+            break;
+        case REAL:
+        case DOUBLE:
+        case NUMERIC:
+        case DECFLOAT:
+            v = ValueJson.get(getBigDecimal());
+            break;
+        case BINARY:
+        case VARBINARY:
+        case BLOB:
+            v = ValueJson.fromJson(getBytesNoCopy());
+            break;
+        case CHAR:
+        case VARCHAR:
+        case CLOB:
+        case VARCHAR_IGNORECASE:
+            v = ValueJson.get(getString());
+            break;
         case GEOMETRY: {
-            ValueGeometry vg = (ValueGeometry) this;
-            return ValueJson.getInternal(GeoJsonUtils.ewkbToGeoJson(vg.getBytesNoCopy(), vg.getDimensionSystem()));
+            ValueGeometry<?> vg = (ValueGeometry<?>) this;
+            v = ValueJson.getInternal(GeoJsonUtils.ewkbToGeoJson(vg.getBytesNoCopy(), vg.getDimensionSystem()));
+            break;
         }
         default:
             throw getDataConversionError(JSON);
+        }
+        if (conversionMode != CONVERT_TO && v.getBytesNoCopy().length > targetType.getPrecision()) {
+            throw v.getValueTooLongException(targetType, column);
+        }
+        return v;
+    }
+
+    /**
+     * Converts this value to a UUID value. May not be called on a NULL value.
+     *
+     * @return the UUID value
+     */
+    public final ValueUuid convertToUuid() {
+        switch (getValueType()) {
+        case UUID:
+            return (ValueUuid) this;
+        case BINARY:
+        case VARBINARY:
+            return ValueUuid.get(getBytesNoCopy());
+        case JAVA_OBJECT:
+            return JdbcUtils.deserializeUuid(getBytesNoCopy());
+        case CHAR:
+        case VARCHAR:
+        case VARCHAR_IGNORECASE:
+            return ValueUuid.get(getString());
+        default:
+            throw getDataConversionError(UUID);
+        case NULL:
+            throw DbException.throwInternalError();
         }
     }
 
     private ValueArray convertToArray(TypeInfo targetType, CastDataProvider provider, int conversionMode,
             Object column) {
-        ExtTypeInfoArray extTypeInfo = (ExtTypeInfoArray) targetType.getExtTypeInfo();
+        TypeInfo componentType = (TypeInfo) targetType.getExtTypeInfo();
         int valueType = getValueType();
         ValueArray v;
         if (valueType == ARRAY) {
@@ -2188,23 +2329,18 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         } else {
             Value[] a;
             switch (valueType) {
-            case ROW:
-                a = ((ValueRow) this).getList();
-                break;
             case BLOB:
                 a = new Value[] { ValueVarbinary.get(getBytesNoCopy()) };
                 break;
             case CLOB:
-            case RESULT_SET:
                 a = new Value[] { ValueVarchar.get(getString()) };
                 break;
             default:
                 a = new Value[] { this };
             }
-            v = ValueArray.get(a);
+            v = ValueArray.get(a, provider);
         }
-        if (extTypeInfo != null) {
-            TypeInfo componentType = extTypeInfo.getComponentType();
+        if (componentType != null) {
             Value[] values = v.getList();
             int length = values.length;
             loop: for (int i = 0; i < length; i++) {
@@ -2217,7 +2353,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
                     while (++i < length) {
                         newValues[i] = values[i].convertTo(componentType, provider, conversionMode, column);
                     }
-                    v = ValueArray.get(newValues);
+                    v = ValueArray.get(newValues, provider);
                     break loop;
                 }
             }
@@ -2228,7 +2364,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             if (conversionMode == CAST_TO) {
                 int p = MathUtils.convertLongToInt(targetType.getPrecision());
                 if (cardinality > p) {
-                    v = ValueArray.get(v.getComponentType(), Arrays.copyOf(values, p));
+                    v = ValueArray.get(v.getComponentType(), Arrays.copyOf(values, p), provider);
                 }
             } else if (cardinality > targetType.getPrecision()) {
                 throw v.getValueTooLongException(targetType, column);
@@ -2237,59 +2373,40 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
         return v;
     }
 
-    private Value convertToRow() {
-        Value[] a;
-        switch (getValueType()) {
-        case ROW:
-            return this;
-        case RESULT_SET:
-            ResultInterface result = getResult();
-            if (result.hasNext()) {
-                a = result.currentRow();
-                if (result.hasNext()) {
-                    throw DbException.get(ErrorCode.SCALAR_SUBQUERY_CONTAINS_MORE_THAN_ONE_ROW);
+    private Value convertToRow(TypeInfo targetType, CastDataProvider provider, int conversionMode,
+            Object column) {
+        ValueRow v;
+        if (getValueType() == ROW) {
+            v = (ValueRow) this;
+        } else {
+            v = ValueRow.get(new Value[] { this });
+        }
+        ExtTypeInfoRow ext = (ExtTypeInfoRow) targetType.getExtTypeInfo();
+        if (ext != null) {
+            Value[] values = v.getList();
+            int length = values.length;
+            Set<Map.Entry<String, TypeInfo>> fields = ext.getFields();
+            if (length != fields.size()) {
+                throw getDataConversionError(targetType);
+            }
+            Iterator<Map.Entry<String, TypeInfo>> iter = fields.iterator();
+            loop: for (int i = 0; i < length; i++) {
+                Value v1 = values[i];
+                TypeInfo componentType = iter.next().getValue();
+                Value v2 = v1.convertTo(componentType, provider, conversionMode, column);
+                if (v1 != v2) {
+                    Value[] newValues = new Value[length];
+                    System.arraycopy(values, 0, newValues, 0, i);
+                    newValues[i] = v2;
+                    while (++i < length) {
+                        newValues[i] = values[i].convertTo(componentType, provider, conversionMode, column);
+                    }
+                    v = ValueRow.get(newValues);
+                    break loop;
                 }
-            } else {
-                return ValueNull.INSTANCE;
             }
-            break;
-        default:
-            a = new Value[] { this };
-            break;
         }
-        return ValueRow.get(a);
-    }
-
-    /**
-     * Converts this value to a RESULT_SET value. May not be called on a NULL
-     * value.
-     *
-     * @return the RESULT_SET value
-     */
-    public final ValueResultSet convertToResultSet() {
-        SimpleResult result;
-        switch (getValueType()) {
-        case RESULT_SET:
-            return (ValueResultSet) this;
-        case ROW:
-            result = new SimpleResult();
-            Value[] values = ((ValueRow) this).getList();
-            for (int i = 0; i < values.length;) {
-                Value v = values[i++];
-                String columnName = "C" + i;
-                result.addColumn(columnName, columnName, v.getType());
-            }
-            result.addRow(values);
-            break;
-        default:
-            result = new SimpleResult();
-            result.addColumn("X", "X", getType());
-            result.addRow(this);
-            break;
-        case NULL:
-            throw DbException.throwInternalError();
-        }
-        return ValueResultSet.get(result);
+        return v;
     }
 
     /**
@@ -2299,24 +2416,28 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @return instance of the DbException.
      */
     final DbException getDataConversionError(int targetType) {
-        DataType from = DataType.getDataType(getValueType());
-        DataType to = DataType.getDataType(targetType);
-        throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, (from != null ? from.name : "type=" + getValueType())
-                + " to " + (to != null ? to.name : "type=" + targetType));
+        throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTypeName(getValueType()) + " to "
+                + getTypeName(targetType));
+    }
+
+    /**
+     * Creates new instance of the DbException for data conversion error.
+     *
+     * @param targetType target data type.
+     * @return instance of the DbException.
+     */
+    final DbException getDataConversionError(TypeInfo targetType) {
+        throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, getTypeName(getValueType()) + " to "
+                + targetType.getTraceSQL());
     }
 
     final DbException getValueTooLongException(TypeInfo targetType, Object column) {
-        String s = getTraceSQL();
-        if (s.length() > 127) {
-            s = s.substring(0, 128) + "...";
-        }
         StringBuilder builder = new StringBuilder();
         if (column != null) {
             builder.append(column).append(' ');
         }
-        targetType.getSQL(builder);
-        return DbException.get(ErrorCode.VALUE_TOO_LONG_2, builder.toString(),
-                s + " (" + getType().getPrecision() + ')');
+        targetType.getSQL(builder, TRACE_SQL_FLAGS);
+        return DbException.getValueTooLongException(builder.toString(), getTraceSQL(), getType().getPrecision());
     }
 
     /**
@@ -2361,9 +2482,18 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
             int dataType = getHigherOrder(leftType, rightType);
             if (dataType == ENUM) {
                 ExtTypeInfoEnum enumerators = ExtTypeInfoEnum.getEnumeratorsForBinaryOperation(l, v);
-                l = l.convertToEnum(enumerators);
-                v = v.convertToEnum(enumerators);
+                l = l.convertToEnum(enumerators, provider);
+                v = v.convertToEnum(enumerators, provider);
             } else {
+                if (dataType <= BLOB) {
+                    if (dataType <= CLOB) {
+                        if (leftType == CHAR || rightType == CHAR) {
+                            dataType = CHAR;
+                        }
+                    } else if (dataType >= BINARY && (leftType == BINARY || rightType == BINARY)) {
+                        dataType = BINARY;
+                    }
+                }
                 l = l.convertTo(dataType, provider);
                 v = v.convertTo(dataType, provider);
             }
@@ -2467,21 +2597,27 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL {
      * @return the exception
      */
     protected final DbException getUnsupportedExceptionForOperation(String op) {
-        return DbException.getUnsupportedException(
-                DataType.getDataType(getValueType()).name + " " + op);
+        return DbException.getUnsupportedException(getTypeName(getValueType()) + ' ' + op);
     }
 
     /**
-     * Returns result for result set value, or single-row result with this value
-     * in column X for other values.
+     * Returns length of this value in characters.
      *
-     * @return result
+     * @return length of this value in characters
+     * @throws NullPointerException if this value is {@code NULL}
      */
-    public ResultInterface getResult() {
-        SimpleResult rs = new SimpleResult();
-        rs.addColumn("X", "X", getType());
-        rs.addRow(this);
-        return rs;
+    public long charLength() {
+        return getString().length();
+    }
+
+    /**
+     * Returns length of this value in bytes.
+     *
+     * @return length of this value in bytes
+     * @throws NullPointerException if this value is {@code NULL}
+     */
+    public long octetLength() {
+        return getBytesNoCopy().length;
     }
     
     /**

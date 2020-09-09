@@ -5,14 +5,6 @@
  */
 package org.h2.mvstore.tx;
 
-import org.h2.engine.IsolationLevel;
-import org.h2.mvstore.Cursor;
-import org.h2.mvstore.DataUtils;
-import org.h2.mvstore.MVMap;
-import org.h2.mvstore.RootReference;
-import org.h2.mvstore.type.DataType;
-import org.h2.value.VersionedValue;
-
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.BitSet;
@@ -22,6 +14,13 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import org.h2.mvstore.Cursor;
+import org.h2.mvstore.DataUtils;
+import org.h2.mvstore.MVMap;
+import org.h2.mvstore.MVStoreException;
+import org.h2.mvstore.RootReference;
+import org.h2.mvstore.type.DataType;
+import org.h2.value.VersionedValue;
 
 /**
  * A map that supports transactions.
@@ -79,7 +78,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         this.txDecisionMaker = new TxDecisionMaker<>(map.getId(), transaction);
         this.ifAbsentDecisionMaker = new TxDecisionMaker.PutIfAbsentDecisionMaker<>(map.getId(),
                 transaction, this::getFromSnapshot);
-        this.lockDecisionMaker = transaction.isolationLevel.allowNonRepeatableRead()
+        this.lockDecisionMaker = transaction.allowNonRepeatableRead()
                 ? new TxDecisionMaker.LockDecisionMaker<>(map.getId(), transaction)
                 : new TxDecisionMaker.RepeatableReadLockDecisionMaker<>(map.getId(), transaction,
                         map.getValueType(), this::getFromSnapshot);
@@ -125,9 +124,6 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * @return the size
      */
     public long sizeAsLong() {
-        if (transaction.isolationLevel != IsolationLevel.READ_COMMITTED) {
-            return sizeAsLongSlow();
-        }
         // getting coherent picture of the map, committing transactions, and undo logs
         // either from values stored in transaction (never loops in that case),
         // or current values from the transaction store (loops until moment of silence)
@@ -139,7 +135,6 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         } while (!snapshot.equals(getSnapshot()));
 
         RootReference<K,VersionedValue<V>> mapRootReference = snapshot.root;
-        BitSet committingTransactions = snapshot.committingTransactions;
         long size = mapRootReference.getTotalCount();
         long undoLogsTotalSize = undoLogRootReferences == null ? size
                 : TransactionStore.calculateUndoLogsTotalSize(undoLogRootReferences);
@@ -147,7 +142,20 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         if (undoLogsTotalSize == 0) {
             return size;
         }
+        switch (transaction.getIsolationLevel()) {
+        case READ_UNCOMMITTED:
+            return adjustSize(undoLogRootReferences, mapRootReference, null, size, undoLogsTotalSize);
+        case READ_COMMITTED:
+            return adjustSize(undoLogRootReferences, mapRootReference, snapshot.committingTransactions, size,
+                    undoLogsTotalSize);
+        default:
+            return sizeAsLongSlow();
+        }
+    }
 
+    private long adjustSize(RootReference<Long, Record<?, ?>>[] undoLogRootReferences,
+            RootReference<K, VersionedValue<V>> mapRootReference, BitSet committingTransactions, long size,
+            long undoLogsTotalSize) {
         // Entries describing removals from the map by this transaction and all transactions,
         // which are committed but not closed yet,
         // and entries about additions to the map by other uncommitted transactions were counted,
@@ -155,7 +163,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         if (2 * undoLogsTotalSize > size) {
             // the undo log is larger than half of the map - scan the entries of the map directly
             Cursor<K, VersionedValue<V>> cursor = map.cursor(mapRootReference, null, null, false);
-            while(cursor.hasNext()) {
+            while (cursor.hasNext()) {
                 cursor.next();
                 VersionedValue<?> currentValue = cursor.getValue();
                 assert currentValue != null;
@@ -203,6 +211,18 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         return size;
     }
 
+    private boolean isIrrelevant(long operationId, VersionedValue<?> currentValue, BitSet committingTransactions) {
+        Object v;
+        if (committingTransactions == null) {
+            v = currentValue.getCurrentValue();
+        } else {
+            int txId = TransactionStore.getTransactionId(operationId);
+            v = txId == transaction.transactionId || committingTransactions.get(txId)
+                    ? currentValue.getCurrentValue() : currentValue.getCommittedValue();
+        }
+        return v == null;
+    }
+
     private long sizeAsLongSlow() {
         long count = 0L;
         Iterator<K> iterator = keyIterator(null, null);
@@ -213,14 +233,6 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         return count;
     }
 
-    private boolean isIrrelevant(long operationId, VersionedValue<?> currentValue, BitSet committingTransactions) {
-        int txId = TransactionStore.getTransactionId(operationId);
-        boolean isVisible = txId == transaction.transactionId || committingTransactions.get(txId);
-        Object v = isVisible ? currentValue.getCurrentValue() : currentValue.getCommittedValue();
-        return v == null;
-    }
-
-
     /**
      * Remove an entry.
      * <p>
@@ -228,7 +240,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * updated or until a lock timeout.
      *
      * @param key the key
-     * @throws IllegalStateException if a lock timeout occurs
+     * @throws MVStoreException if a lock timeout occurs
      * @throws ClassCastException if type of the specified key is not compatible with this map
      */
     @SuppressWarnings("unchecked")
@@ -246,7 +258,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * @param key the key
      * @param value the new value (not null)
      * @return the old value
-     * @throws IllegalStateException if a lock timeout occurs
+     * @throws MVStoreException if a lock timeout occurs
      */
     @Override
     public V put(K key, V value) {
@@ -294,7 +306,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      *
      * @param key the key
      * @return the locked value
-     * @throws IllegalStateException if a lock timeout occurs
+     * @throws MVStoreException if a lock timeout occurs
      */
     public V lock(K key) {
         lockDecisionMaker.initialize(key, null);
@@ -353,7 +365,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         } while (blockingTransaction.sequenceNum > sequenceNumWhenStarted
                 || transaction.waitFor(blockingTransaction, mapName, key));
 
-        throw DataUtils.newIllegalStateException(DataUtils.ERROR_TRANSACTION_LOCKED,
+        throw DataUtils.newMVStoreException(DataUtils.ERROR_TRANSACTION_LOCKED,
                 "Map entry <{0}> with key <{1}> and value {2} is locked by tx {3} and can not be updated by tx {4}"
                         + " within allocated time interval {5} ms.",
                 mapName, key, result, blockingTransaction.transactionId, transaction.transactionId,
@@ -405,7 +417,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
             // TODO: eliminate exception usage as part of normal control flaw
             set(key, value);
             return true;
-        } catch (IllegalStateException e) {
+        } catch (MVStoreException e) {
             return false;
         }
     }
@@ -782,8 +794,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * @param <X>
      *            the type of elements
      */
-    private static class UncommittedIterator<K,V,X> extends TMIterator<K,V,X>
-    {
+    private static class UncommittedIterator<K,V,X> extends TMIterator<K,V,X> {
         UncommittedIterator(TransactionMap<K, V> transactionMap, K from, K to, boolean reverse, boolean forEntries) {
             super(transactionMap, from, to, transactionMap.createSnapshot(), reverse, forEntries);
             fetchNext();
@@ -816,8 +827,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         }
     }
 
-    private static final class ValidationIterator<K,V,X> extends UncommittedIterator<K,V,X>
-    {
+    private static final class ValidationIterator<K,V,X> extends UncommittedIterator<K,V,X> {
         ValidationIterator(TransactionMap<K,V> transactionMap, K from, K to) {
             super(transactionMap, from, to, transactionMap.createSnapshot(), false, false);
         }
@@ -843,8 +853,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * @param <X>
      *            the type of elements
      */
-    private static final class CommittedIterator<K,V,X> extends TMIterator<K,V,X>
-    {
+    private static final class CommittedIterator<K,V,X> extends TMIterator<K,V,X> {
         CommittedIterator(TransactionMap<K, V> transactionMap, K from, K to, boolean reverse, boolean forEntries) {
             super(transactionMap, from, to, transactionMap.getSnapshot(), reverse, forEntries);
             fetchNext();
@@ -891,8 +900,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
      * @param <X>
      *            the type of elements
      */
-    private static final class RepeatableIterator<K,V,X> extends TMIterator<K,V,X>
-    {
+    private static final class RepeatableIterator<K,V,X> extends TMIterator<K,V,X> {
         private final DataType<K> keyType;
 
         private K snapshotKey;
@@ -987,8 +995,7 @@ public final class TransactionMap<K, V> extends AbstractMap<K,V> {
         }
     }
 
-    private abstract static class TMIterator<K,V,X> implements Iterator<X>
-    {
+    private abstract static class TMIterator<K,V,X> implements Iterator<X> {
         final int transactionId;
 
         final BitSet committingTransactions;

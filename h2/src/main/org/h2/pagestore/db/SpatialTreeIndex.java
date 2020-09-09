@@ -5,20 +5,20 @@
  */
 package org.h2.pagestore.db;
 
+import org.h2.mvstore.rtree.Spatial;
 import java.util.Iterator;
 
 import org.h2.command.query.AllColumnsForPlan;
-import org.h2.engine.Session;
-import org.h2.index.BaseIndex;
+import org.h2.engine.SessionLocal;
 import org.h2.index.Cursor;
+import org.h2.index.Index;
 import org.h2.index.IndexType;
 import org.h2.index.SpatialIndex;
 import org.h2.message.DbException;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.db.MVSpatialIndex;
-import org.h2.mvstore.db.MVTableEngine;
 import org.h2.mvstore.rtree.MVRTreeMap;
-import org.h2.mvstore.rtree.SpatialKey;
+import org.h2.mvstore.db.SpatialKey;
 import org.h2.result.Row;
 import org.h2.result.SearchRow;
 import org.h2.result.SortOrder;
@@ -34,7 +34,7 @@ import org.h2.value.Value;
  * @author Noel Grandin
  * @author Nicolas Fortin, Atelier SIG, IRSTV FR CNRS 24888
  */
-public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
+public class SpatialTreeIndex extends Index implements SpatialIndex {
 
     private static final String MAP_PREFIX  = "RTREE_";
 
@@ -58,7 +58,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
      */
     public SpatialTreeIndex(Table table, int id, String indexName,
             IndexColumn[] columns, IndexType indexType, boolean persistent,
-            boolean create, Session session) {
+            boolean create, SessionLocal session) {
         super(table, id, indexName, columns, indexType);
         if (indexType.isUnique()) {
             throw DbException.getUnsupportedException("not unique");
@@ -101,8 +101,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
                 throw DbException.getUnsupportedException(
                         "Persistent index with id<0");
             }
-            MVTableEngine.init(session.getDatabase());
-            store = session.getDatabase().getStore().getMvStore();
+            store = session.getDatabase().getOrCreateStore().getMvStore();
             // Called after CREATE SPATIAL INDEX or
             // by PageStore.addMeta
             treeMap =  store.openMap(MAP_PREFIX + getId(),
@@ -114,13 +113,13 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public void close(Session session) {
+    public void close(SessionLocal session) {
         store.close();
         closed = true;
     }
 
     @Override
-    public void add(Session session, Row row) {
+    public void add(SessionLocal session, Row row) {
         if (closed) {
             throw DbException.throwInternalError();
         }
@@ -150,7 +149,7 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
     
     
     @Override
-    public void remove(Session session, Row row) {
+    public void remove(SessionLocal session, Row row) {
         if (closed) {
             throw DbException.throwInternalError();
         }
@@ -160,12 +159,12 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public Cursor find(Session session, SearchRow first, SearchRow last) {
+    public Cursor find(SessionLocal session, SearchRow first, SearchRow last) {
         return new SpatialCursor(treeMap.keySet().iterator(), table, session);
     }
 
     @Override
-    public Cursor findByGeometry(Session session, SearchRow first, SearchRow last, SearchRow intersection) {
+    public Cursor findByGeometry(SessionLocal session, SearchRow first, SearchRow last, SearchRow intersection) {
         if (intersection == null) {
             return find(session, first, last);
         }
@@ -173,21 +172,21 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public double getCost(Session session, int[] masks,
+    public double getCost(SessionLocal session, int[] masks,
             TableFilter[] filters, int filter, SortOrder sortOrder,
             AllColumnsForPlan allColumnsSet) {
         return MVSpatialIndex.getCostRangeIndex(masks, columns);
     }
 
     @Override
-    public void remove(Session session) {
+    public void remove(SessionLocal session) {
         if (!treeMap.isClosed()) {
             store.removeMap(treeMap);
         }
     }
 
     @Override
-    public void truncate(Session session) {
+    public void truncate(SessionLocal session) {
         treeMap.clear();
     }
 
@@ -197,12 +196,12 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
     }
 
     @Override
-    public long getRowCount(Session session) {
+    public long getRowCount(SessionLocal session) {
         return treeMap.sizeAsLong();
     }
 
     @Override
-    public long getRowCountApproximation() {
+    public long getRowCountApproximation(SessionLocal session) {
         return treeMap.sizeAsLong();
     }
 
@@ -217,12 +216,12 @@ public class SpatialTreeIndex extends BaseIndex implements SpatialIndex {
      */
     private static final class SpatialCursor implements Cursor {
 
-        private final Iterator<SpatialKey> it;
-        private SpatialKey current;
+        private final Iterator<Spatial> it;
+        private Spatial current;
         private final Table table;
-        private final Session session;
+        private final SessionLocal session;
 
-        public SpatialCursor(Iterator<SpatialKey> it, Table table, Session session) {
+        public SpatialCursor(Iterator<Spatial> it, Table table, SessionLocal session) {
             this.it = it;
             this.table = table;
             this.session = session;

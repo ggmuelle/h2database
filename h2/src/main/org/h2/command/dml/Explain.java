@@ -13,16 +13,16 @@ import org.h2.command.CommandInterface;
 import org.h2.command.Prepared;
 import org.h2.engine.Database;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionColumn;
-import org.h2.mvstore.db.MVTableEngine.Store;
+import org.h2.mvstore.db.Store;
 import org.h2.pagestore.PageStore;
 import org.h2.result.LocalResult;
 import org.h2.result.ResultInterface;
 import org.h2.table.Column;
 import org.h2.util.HasSQL;
-import org.h2.value.Value;
+import org.h2.value.TypeInfo;
 import org.h2.value.ValueVarchar;
 
 /**
@@ -35,7 +35,7 @@ public class Explain extends Prepared {
     private LocalResult result;
     private boolean executeCommand;
 
-    public Explain(Session session) {
+    public Explain(SessionLocal session) {
         super(session);
     }
 
@@ -71,10 +71,8 @@ public class Explain extends Prepared {
 
     @Override
     public ResultInterface query(int maxrows) {
-        Column column = new Column("PLAN", Value.VARCHAR);
         Database db = session.getDatabase();
-        ExpressionColumn expr = new ExpressionColumn(db, column);
-        Expression[] expressions = { expr };
+        Expression[] expressions = { new ExpressionColumn(db, new Column("PLAN", TypeInfo.TYPE_VARCHAR)) };
         result = new LocalResult(session, expressions, 1, 1);
         int sqlFlags = HasSQL.ADD_PLAN_INFORMATION;
         if (maxrows >= 0) {

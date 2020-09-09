@@ -7,7 +7,7 @@ package org.h2.pagestore.db;
 
 import org.h2.api.DatabaseEventListener;
 import org.h2.api.ErrorCode;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.engine.SysProperties;
 import org.h2.message.DbException;
 import org.h2.pagestore.Page;
@@ -382,9 +382,7 @@ public class PageBtreeNode extends PageBtree {
                 int child = childPageIds[i];
                 PageBtree page = index.getPage(child);
                 count += page.getRowCount();
-                index.getDatabase().setProgress(
-                        DatabaseEventListener.STATE_SCAN_FILE,
-                        index.getName(), count, Integer.MAX_VALUE);
+                index.getDatabase().setProgress(DatabaseEventListener.STATE_SCAN_FILE, index.getName(), count, 0);
             }
             rowCount = count;
         }
@@ -552,7 +550,7 @@ public class PageBtreeNode extends PageBtree {
     }
 
     @Override
-    public void moveTo(Session session, int newPos) {
+    public void moveTo(SessionLocal session, int newPos) {
         PageStore store = index.getPageStore();
         store.logUndo(this, data);
         PageBtreeNode p2 = PageBtreeNode.create(index, newPos, parentPageId);

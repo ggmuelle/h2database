@@ -12,10 +12,10 @@ import java.util.Arrays;
 
 import org.h2.api.ErrorCode;
 import org.h2.api.Trigger;
-import org.h2.command.Parser;
 import org.h2.engine.Constants;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
+import org.h2.jdbc.JdbcConnection;
 import org.h2.message.DbException;
 import org.h2.message.Trace;
 import org.h2.result.Row;
@@ -23,14 +23,14 @@ import org.h2.table.Table;
 import org.h2.util.JdbcUtils;
 import org.h2.util.SourceCompiler;
 import org.h2.util.StringUtils;
-import org.h2.value.DataType;
 import org.h2.value.Value;
+import org.h2.value.ValueToObjectConverter;
 
 /**
  *A trigger is created using the statement
  * CREATE TRIGGER
  */
-public class TriggerObject extends SchemaObjectBase {
+public final class TriggerObject extends SchemaObject {
 
     /**
      * The default queue size.
@@ -73,7 +73,7 @@ public class TriggerObject extends SchemaObjectBase {
             return;
         }
         try {
-            Session sysSession = database.getSystemSession();
+            SessionLocal sysSession = database.getSystemSession();
             Connection c2 = sysSession.createConnection(false);
             Object obj;
             if (triggerClassName != null) {
@@ -158,7 +158,7 @@ public class TriggerObject extends SchemaObjectBase {
      * @param type the trigger type
      * @param beforeAction if this method is called before applying the changes
      */
-    public void fire(Session session, int type, boolean beforeAction) {
+    public void fire(SessionLocal session, int type, boolean beforeAction) {
         if (rowBased || before != beforeAction || (typeMask & type) == 0) {
             return;
         }
@@ -168,32 +168,27 @@ public class TriggerObject extends SchemaObjectBase {
         if (type != Trigger.SELECT) {
             old = session.setCommitOrRollbackDisabled(true);
         }
-        Value identity = session.getLastScopeIdentity();
+        Value identity = session.getLastIdentity();
         try {
             triggerCallback.fire(c2, null, null);
         } catch (Throwable e) {
             throw getErrorExecutingTrigger(e);
         } finally {
-            if (session.getLastTriggerIdentity() != null) {
-                session.setLastScopeIdentity(session.getLastTriggerIdentity());
-                session.setLastTriggerIdentity(null);
-            } else {
-                session.setLastScopeIdentity(identity);
-            }
+            session.setLastIdentity(identity);
             if (type != Trigger.SELECT) {
                 session.setCommitOrRollbackDisabled(old);
             }
         }
     }
 
-    private static Object[] convertToObjectList(Row row) {
+    private static Object[] convertToObjectList(Row row, JdbcConnection conn) {
         if (row == null) {
             return null;
         }
         int len = row.getColumnCount();
         Object[] list = new Object[len];
         for (int i = 0; i < len; i++) {
-            list[i] = row.getValue(i).getObject();
+            list[i] = ValueToObjectConverter.valueToDefaultObject(row.getValue(i), conn, false);
         }
         return list;
     }
@@ -213,7 +208,7 @@ public class TriggerObject extends SchemaObjectBase {
      * @param rollback when the operation occurred within a rollback
      * @return true if no further action is required (for 'instead of' triggers)
      */
-    public boolean fireRow(Session session, Table table, Row oldRow, Row newRow,
+    public boolean fireRow(SessionLocal session, Table table, Row oldRow, Row newRow,
             boolean beforeAction, boolean rollback) {
         if (!rowBased || before != beforeAction) {
             return false;
@@ -243,18 +238,18 @@ public class TriggerObject extends SchemaObjectBase {
         if (!fire) {
             return false;
         }
-        oldList = convertToObjectList(oldRow);
-        newList = convertToObjectList(newRow);
+        JdbcConnection c2 = session.createConnection(false);
+        oldList = convertToObjectList(oldRow, c2);
+        newList = convertToObjectList(newRow, c2);
         Object[] newListBackup;
         if (before && newList != null) {
             newListBackup = Arrays.copyOf(newList, newList.length);
         } else {
             newListBackup = null;
         }
-        Connection c2 = session.createConnection(false);
         boolean old = session.getAutoCommit();
         boolean oldDisabled = session.setCommitOrRollbackDisabled(true);
-        Value identity = session.getLastScopeIdentity();
+        Value identity = session.getLastIdentity();
         try {
             session.setAutoCommit(false);
             try {
@@ -266,7 +261,7 @@ public class TriggerObject extends SchemaObjectBase {
                 for (int i = 0; i < newList.length; i++) {
                     Object o = newList[i];
                     if (o != newListBackup[i]) {
-                        newRow.setValue(i, DataType.convertToValue(session, o, Value.UNKNOWN));
+                        newRow.setValue(i, ValueToObjectConverter.objectToValue(session, o, Value.UNKNOWN));
                     }
                 }
             }
@@ -277,12 +272,7 @@ public class TriggerObject extends SchemaObjectBase {
                 throw DbException.convert(e);
             }
         } finally {
-            if (session.getLastTriggerIdentity() != null) {
-                session.setLastScopeIdentity(session.getLastTriggerIdentity());
-                session.setLastTriggerIdentity(null);
-            } else {
-                session.setLastScopeIdentity(identity);
-            }
+            session.setLastIdentity(identity);
             session.setCommitOrRollbackDisabled(oldDisabled);
             session.setAutoCommit(old);
         }
@@ -298,6 +288,15 @@ public class TriggerObject extends SchemaObjectBase {
         }
         return DbException.get(ErrorCode.ERROR_EXECUTING_TRIGGER_3, e, getName(),
                 triggerClassName != null ? triggerClassName : "..source..", e.toString());
+    }
+
+    /**
+     * Returns the trigger type.
+     *
+     * @return the trigger type
+     */
+    public int getTypeMask() {
+        return typeMask;
     }
 
     /**
@@ -355,11 +354,9 @@ public class TriggerObject extends SchemaObjectBase {
             builder.append(" QUEUE ").append(queueSize);
         }
         if (triggerClassName != null) {
-            builder.append(" CALL ");
-            Parser.quoteIdentifier(builder, triggerClassName, DEFAULT_SQL_FLAGS);
+            StringUtils.quoteStringSQL(builder.append(" CALL "), triggerClassName);
         } else {
-            builder.append(" AS ");
-            StringUtils.quoteStringSQL(builder, triggerSource);
+            StringUtils.quoteStringSQL(builder.append(" AS "), triggerSource);
         }
         return builder.toString();
     }
@@ -417,7 +414,7 @@ public class TriggerObject extends SchemaObjectBase {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         table.removeTrigger(this);
         database.removeMeta(session, getId());
         if (triggerCallback != null) {

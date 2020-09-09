@@ -11,8 +11,11 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -21,21 +24,23 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Properties;
 import javax.naming.Context;
 import javax.sql.DataSource;
 import org.h2.api.ErrorCode;
 import org.h2.api.JavaObjectSerializer;
-import org.h2.engine.CastDataProvider;
 import org.h2.engine.SysProperties;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcPreparedStatement;
 import org.h2.message.DbException;
+import org.h2.tools.SimpleResultSet;
 import org.h2.util.Utils.ClassFactory;
-import org.h2.value.DataType;
 import org.h2.value.Value;
 import org.h2.value.ValueLob;
+import org.h2.value.ValueToObjectConverter;
 import org.h2.value.ValueUuid;
 
 /**
@@ -452,10 +457,10 @@ public class JdbcUtils {
      *            the parameter index
      * @param value
      *            the value
-     * @param provider
-     *            the cast information provider
+     * @param conn
+     *            the own connection
      */
-    public static void set(PreparedStatement prep, int parameterIndex, Value value, CastDataProvider provider)
+    public static void set(PreparedStatement prep, int parameterIndex, Value value, JdbcConnection conn)
             throws SQLException {
         if (prep instanceof JdbcPreparedStatement) {
             if (value instanceof ValueLob) {
@@ -464,11 +469,11 @@ public class JdbcUtils {
                 prep.setObject(parameterIndex, value);
             }
         } else {
-            setOther(prep, parameterIndex, value, provider);
+            setOther(prep, parameterIndex, value, conn);
         }
     }
 
-    private static void setOther(PreparedStatement prep, int parameterIndex, Value value, CastDataProvider provider)
+    private static void setOther(PreparedStatement prep, int parameterIndex, Value value, JdbcConnection conn)
                 throws SQLException {
         int valueType = value.getValueType();
         switch (valueType) {
@@ -491,6 +496,7 @@ public class JdbcUtils {
             prep.setLong(parameterIndex, value.getLong());
             break;
         case Value.NUMERIC:
+        case Value.DECFLOAT:
             prep.setBigDecimal(parameterIndex, value.getBigDecimal());
             break;
         case Value.DOUBLE:
@@ -549,11 +555,12 @@ public class JdbcUtils {
             setLob(prep, parameterIndex, (ValueLob) value);
             break;
         case Value.ARRAY:
-            prep.setArray(parameterIndex, prep.getConnection().createArrayOf("NULL", (Object[]) value.getObject()));
+            prep.setArray(parameterIndex, prep.getConnection().createArrayOf("NULL",
+                    (Object[]) ValueToObjectConverter.valueToDefaultObject(value, conn, true)));
             break;
         case Value.JAVA_OBJECT:
             prep.setObject(parameterIndex,
-                    JdbcUtils.deserialize(value.getBytesNoCopy(), provider.getJavaObjectSerializer()),
+                    JdbcUtils.deserialize(value.getBytesNoCopy(), conn.getJavaObjectSerializer()),
                     Types.JAVA_OBJECT);
             break;
         case Value.UUID:
@@ -584,7 +591,7 @@ public class JdbcUtils {
             }
             break;
         default:
-            throw DbException.getUnsupportedException(DataType.getDataType(valueType).name);
+            throw DbException.getUnsupportedException(Value.getTypeName(valueType));
         }
     }
 
@@ -600,4 +607,164 @@ public class JdbcUtils {
         }
     }
 
+    /**
+     * Get metadata from the database.
+     *
+     * @param conn the connection
+     * @param sql the SQL statement
+     * @return the metadata
+     */
+    public static ResultSet getMetaResultSet(Connection conn, String sql)
+            throws SQLException {
+        DatabaseMetaData meta = conn.getMetaData();
+        if (isBuiltIn(sql, "@best_row_identifier")) {
+            String[] p = split(sql);
+            int scale = p[4] == null ? 0 : Integer.parseInt(p[4]);
+            boolean nullable = Boolean.parseBoolean(p[5]);
+            return meta.getBestRowIdentifier(p[1], p[2], p[3], scale, nullable);
+        } else if (isBuiltIn(sql, "@catalogs")) {
+            return meta.getCatalogs();
+        } else if (isBuiltIn(sql, "@columns")) {
+            String[] p = split(sql);
+            return meta.getColumns(p[1], p[2], p[3], p[4]);
+        } else if (isBuiltIn(sql, "@column_privileges")) {
+            String[] p = split(sql);
+            return meta.getColumnPrivileges(p[1], p[2], p[3], p[4]);
+        } else if (isBuiltIn(sql, "@cross_references")) {
+            String[] p = split(sql);
+            return meta.getCrossReference(p[1], p[2], p[3], p[4], p[5], p[6]);
+        } else if (isBuiltIn(sql, "@exported_keys")) {
+            String[] p = split(sql);
+            return meta.getExportedKeys(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@imported_keys")) {
+            String[] p = split(sql);
+            return meta.getImportedKeys(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@index_info")) {
+            String[] p = split(sql);
+            boolean unique = Boolean.parseBoolean(p[4]);
+            boolean approx = Boolean.parseBoolean(p[5]);
+            return meta.getIndexInfo(p[1], p[2], p[3], unique, approx);
+        } else if (isBuiltIn(sql, "@primary_keys")) {
+            String[] p = split(sql);
+            return meta.getPrimaryKeys(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@procedures")) {
+            String[] p = split(sql);
+            return meta.getProcedures(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@procedure_columns")) {
+            String[] p = split(sql);
+            return meta.getProcedureColumns(p[1], p[2], p[3], p[4]);
+        } else if (isBuiltIn(sql, "@schemas")) {
+            return meta.getSchemas();
+        } else if (isBuiltIn(sql, "@tables")) {
+            String[] p = split(sql);
+            String[] types = p[4] == null ? null : StringUtils.arraySplit(p[4], ',', false);
+            return meta.getTables(p[1], p[2], p[3], types);
+        } else if (isBuiltIn(sql, "@table_privileges")) {
+            String[] p = split(sql);
+            return meta.getTablePrivileges(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@table_types")) {
+            return meta.getTableTypes();
+        } else if (isBuiltIn(sql, "@type_info")) {
+            return meta.getTypeInfo();
+        } else if (isBuiltIn(sql, "@udts")) {
+            String[] p = split(sql);
+            int[] types;
+            if (p[4] == null) {
+                types = null;
+            } else {
+                String[] t = StringUtils.arraySplit(p[4], ',', false);
+                types = new int[t.length];
+                for (int i = 0; i < t.length; i++) {
+                    types[i] = Integer.parseInt(t[i]);
+                }
+            }
+            return meta.getUDTs(p[1], p[2], p[3], types);
+        } else if (isBuiltIn(sql, "@version_columns")) {
+            String[] p = split(sql);
+            return meta.getVersionColumns(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@memory")) {
+            SimpleResultSet rs = new SimpleResultSet();
+            rs.addColumn("Type", Types.VARCHAR, 0, 0);
+            rs.addColumn("KB", Types.VARCHAR, 0, 0);
+            rs.addRow("Used Memory", Integer.toString(Utils.getMemoryUsed()));
+            rs.addRow("Free Memory", Integer.toString(Utils.getMemoryFree()));
+            return rs;
+        } else if (isBuiltIn(sql, "@info")) {
+            SimpleResultSet rs = new SimpleResultSet();
+            rs.addColumn("KEY", Types.VARCHAR, 0, 0);
+            rs.addColumn("VALUE", Types.VARCHAR, 0, 0);
+            rs.addRow("conn.getCatalog", conn.getCatalog());
+            rs.addRow("conn.getAutoCommit", Boolean.toString(conn.getAutoCommit()));
+            rs.addRow("conn.getTransactionIsolation", Integer.toString(conn.getTransactionIsolation()));
+            rs.addRow("conn.getWarnings", String.valueOf(conn.getWarnings()));
+            String map;
+            try {
+                map = String.valueOf(conn.getTypeMap());
+            } catch (SQLException e) {
+                map = e.toString();
+            }
+            rs.addRow("conn.getTypeMap", map);
+            rs.addRow("conn.isReadOnly", Boolean.toString(conn.isReadOnly()));
+            rs.addRow("conn.getHoldability", Integer.toString(conn.getHoldability()));
+            addDatabaseMetaData(rs, meta);
+            return rs;
+        } else if (isBuiltIn(sql, "@attributes")) {
+            String[] p = split(sql);
+            return meta.getAttributes(p[1], p[2], p[3], p[4]);
+        } else if (isBuiltIn(sql, "@super_tables")) {
+            String[] p = split(sql);
+            return meta.getSuperTables(p[1], p[2], p[3]);
+        } else if (isBuiltIn(sql, "@super_types")) {
+            String[] p = split(sql);
+            return meta.getSuperTypes(p[1], p[2], p[3]);
+        }
+        return null;
+    }
+
+    private static void addDatabaseMetaData(SimpleResultSet rs,
+            DatabaseMetaData meta) {
+        Method[] methods = DatabaseMetaData.class.getDeclaredMethods();
+        Arrays.sort(methods, Comparator.comparing(Method::toString));
+        for (Method m : methods) {
+            if (m.getParameterTypes().length == 0) {
+                try {
+                    Object o = m.invoke(meta);
+                    rs.addRow("meta." + m.getName(), String.valueOf(o));
+                } catch (InvocationTargetException e) {
+                    rs.addRow("meta." + m.getName(), e.getTargetException().toString());
+                } catch (Exception e) {
+                    rs.addRow("meta." + m.getName(), e.toString());
+                }
+            }
+        }
+    }
+
+    /**
+     * Check is the SQL string starts with a prefix (case insensitive).
+     *
+     * @param sql the SQL statement
+     * @param builtIn the prefix
+     * @return true if yes
+     */
+    public static boolean isBuiltIn(String sql, String builtIn) {
+        return sql.regionMatches(true, 0, builtIn, 0, builtIn.length());
+    }
+
+    /**
+     * Split the string using the space separator into at least 10 entries.
+     *
+     * @param s the string
+     * @return the array
+     */
+    public static String[] split(String s) {
+        String[] t = StringUtils.arraySplit(s, ' ', true);
+        String[] list = new String[Math.max(10, t.length)];
+        System.arraycopy(t, 0, list, 0, t.length);
+        for (int i = 0; i < list.length; i++) {
+            if ("null".equals(list[i])) {
+                list[i] = null;
+            }
+        }
+        return list;
+    }
 }

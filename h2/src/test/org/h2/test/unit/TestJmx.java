@@ -34,7 +34,7 @@ public class TestJmx extends TestDb {
     public static void main(String... a) throws Exception {
         TestBase base = TestBase.createCaller().init();
         base.config.mvStore = false;
-        base.test();
+        base.testFromMain();
     }
 
     @Override
@@ -95,8 +95,7 @@ public class TestJmx extends TestDb {
         mbeanServer.setAttribute(name, new Attribute("TraceLevel", 0));
         assertEquals("0", mbeanServer.
                 getAttribute(name, "TraceLevel").toString());
-        assertTrue(mbeanServer.
-                getAttribute(name, "Version").toString().startsWith("1."));
+        assertEquals(Constants.FULL_VERSION, mbeanServer.getAttribute(name, "Version").toString());
         assertEquals(14, info.getAttributes().length);
         result = mbeanServer.invoke(name, "listSettings", null, null).toString();
         assertContains(result, "ANALYZE_AUTO");

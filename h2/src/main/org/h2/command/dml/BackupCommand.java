@@ -17,11 +17,11 @@ import org.h2.command.CommandInterface;
 import org.h2.command.Prepared;
 import org.h2.engine.Constants;
 import org.h2.engine.Database;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.message.DbException;
 import org.h2.mvstore.MVStore;
-import org.h2.mvstore.db.MVTableEngine.Store;
+import org.h2.mvstore.db.Store;
 import org.h2.pagestore.PageStore;
 import org.h2.result.ResultInterface;
 import org.h2.store.FileLister;
@@ -36,7 +36,7 @@ public class BackupCommand extends Prepared {
 
     private Expression fileNameExpr;
 
-    public BackupCommand(Session session) {
+    public BackupCommand(SessionLocal session) {
         super(session);
     }
 
@@ -45,7 +45,7 @@ public class BackupCommand extends Prepared {
     }
 
     @Override
-    public int update() {
+    public long update() {
         String name = fileNameExpr.getValue(session).getString();
         session.getUser().checkAdmin();
         backupTo(name);

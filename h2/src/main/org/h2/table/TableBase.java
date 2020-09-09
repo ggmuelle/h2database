@@ -9,9 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import org.h2.command.ddl.CreateTableData;
 import org.h2.engine.Database;
-import org.h2.engine.DbSettings;
 import org.h2.index.IndexType;
-import org.h2.mvstore.db.MVTableEngine;
 import org.h2.result.SearchRow;
 import org.h2.result.SortOrder;
 import org.h2.util.StringUtils;
@@ -47,7 +45,7 @@ public abstract class TableBase extends Table {
             return SearchRow.ROWID_INDEX;
         }
         IndexColumn first = cols[0];
-        if (first.sortType != SortOrder.ASCENDING) {
+        if ((first.sortType & SortOrder.DESCENDING) != 0) {
             return SearchRow.ROWID_INDEX;
         }
         switch (first.column.getType().getValueType()) {
@@ -83,7 +81,16 @@ public abstract class TableBase extends Table {
     }
 
     @Override
+    public String getCreateSQLForMeta() {
+        return getCreateSQL(true);
+    }
+
+    @Override
     public String getCreateSQL() {
+        return getCreateSQL(false);
+    }
+
+    private String getCreateSQL(boolean forMeta) {
         Database db = getDatabase();
         if (db == null) {
             // closed
@@ -116,15 +123,11 @@ public abstract class TableBase extends Table {
             if (i > 0) {
                 buff.append(",\n    ");
             }
-            buff.append(columns[i].getCreateSQL());
+            buff.append(columns[i].getCreateSQL(forMeta));
         }
         buff.append("\n)");
         if (tableEngine != null) {
-            DbSettings s = db.getSettings();
-            String d = s.defaultTableEngine;
-            if (d == null && s.mvStore) {
-                d = MVTableEngine.class.getName();
-            }
+            String d = db.getSettings().defaultTableEngine;
             if (d == null || !tableEngine.endsWith(d)) {
                 buff.append("\nENGINE ");
                 StringUtils.quoteIdentifier(buff, tableEngine);

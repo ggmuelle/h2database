@@ -21,13 +21,6 @@ import org.h2.tools.DeleteDbFiles;
 public abstract class TestDb extends TestBase {
 
     /**
-     * Start the TCP server if enabled in the configuration.
-     */
-    protected void startServerIfRequired() throws SQLException {
-        config.beforeTest();
-    }
-
-    /**
      * Open a database connection in admin mode. The default user name and
      * password is used.
      *
@@ -139,9 +132,6 @@ public abstract class TestDb extends TestBase {
         }
         if (config.cipher != null) {
             url = addOption(url, "CIPHER", config.cipher);
-        }
-        if (config.defrag) {
-            url = addOption(url, "DEFRAG_ALWAYS", "TRUE");
         }
         if (config.collation != null) {
             url = addOption(url, "COLLATION", config.collation);

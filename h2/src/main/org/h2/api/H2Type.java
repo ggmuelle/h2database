@@ -7,256 +7,294 @@ package org.h2.api;
 
 import java.sql.SQLType;
 
+import org.h2.value.ExtTypeInfoRow;
+import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
  * Data types of H2.
  */
-public enum H2Type implements SQLType {
-
-    // Exact numeric data types
-
-    /**
-     * The TINYINT data type.
-     */
-    TINYINT("TINYINT", Value.TINYINT),
-
-    /**
-     * The SMALLINT data type.
-     */
-    SMALLINT("SMALLINT", Value.SMALLINT),
-
-    /**
-     * The INTEGER data type.
-     */
-    INTEGER("INTEGER", Value.INTEGER),
-
-    /**
-     * The BIGINT data type.
-     */
-    BIGINT("BIGINT", Value.BIGINT),
-
-    /**
-     * The NUMERIC data type.
-     */
-    NUMERIC("NUMERIC", Value.NUMERIC),
-
-    // Approximate numeric data types
-
-    /**
-     * The REAL data type.
-     */
-    REAL("REAL", Value.REAL),
-
-    /**
-     * The DOUBLE PRECISION data type.
-     */
-    DOUBLE_PRECISION("DOUBLE PRECISION", Value.DOUBLE),
+public final class H2Type implements SQLType {
 
     // Character strings
 
     /**
-     * The CHAR data type.
+     * The CHARACTER data type.
      */
-    CHAR("CHAR", Value.CHAR),
+    public static final H2Type CHAR = new H2Type(TypeInfo.getTypeInfo(Value.CHAR), "CHARACTER");
 
     /**
-     * The VARCHAR data type.
+     * The CHARACTER VARYING data type.
      */
-    VARCHAR("VARCHAR", Value.VARCHAR),
+    public static final H2Type VARCHAR = new H2Type(TypeInfo.TYPE_VARCHAR, "CHARACTER VARYING");
+
+    /**
+     * The CHARACTER LARGE OBJECT data type.
+     */
+    public static final H2Type CLOB = new H2Type(TypeInfo.TYPE_CLOB, "CHARACTER LARGE OBJECT");
 
     /**
      * The VARCHAR_IGNORECASE data type.
      */
-    VARCHAR_IGNORECASE("VARCHAR_IGNORECASE", Value.VARCHAR_IGNORECASE),
+    public static final H2Type VARCHAR_IGNORECASE = new H2Type(TypeInfo.TYPE_VARCHAR_IGNORECASE, "VARCHAR_IGNORECASE");
+
+    // Binary strings
 
     /**
-     * The CLOB data type.
+     * The BINARY data type.
      */
-    CLOB("CLOB", Value.CLOB),
-
-    // Date-time data types
+    public static final H2Type BINARY = new H2Type(TypeInfo.getTypeInfo(Value.BINARY), "BINARY");
 
     /**
-     * The DATE data type.
+     * The BINARY VARYING data type.
      */
-    DATE("DATE", Value.DATE),
+    public static final H2Type VARBINARY = new H2Type(TypeInfo.TYPE_VARBINARY, "BINARY VARYING");
 
     /**
-     * The TIME data type.
+     * The BINARY LARGE OBJECT data type.
      */
-    TIME("TIME", Value.TIME),
-
-    /**
-     * The TIME WITH TIME ZONE data type.
-     */
-    TIME_WITH_TIME_ZONE("TIME WITH TIME ZONE", Value.TIME_TZ),
-
-    /**
-     * The TIMESTAMP data type.
-     */
-    TIMESTAMP("TIMESTAMP", Value.TIMESTAMP),
-
-    /**
-     * The TIMESTAMP WITH TIME ZONE data type.
-     */
-    TIMESTAMP_WITH_TIME_ZONE("TIMESTAMP WITH TIME ZONE", Value.TIMESTAMP_TZ),
-
-    // Intervals
-
-    /**
-     * The INTERVAL YEAR data type.
-     */
-    INTERVAL_YEAR("INTERVAL YEAR", Value.INTERVAL_YEAR),
-
-    /**
-     * The INTERVAL MONTH data type.
-     */
-    INTERVAL_MONTH("INTERVAL MONTH", Value.INTERVAL_MONTH),
-
-    /**
-     * The INTERVAL DAY data type.
-     */
-    INTERVAL_DAY("INTERVAL DAY", Value.INTERVAL_DAY),
-
-    /**
-     * The INTERVAL HOUR data type.
-     */
-    INTERVAL_HOUR("INTERVAL HOUR", Value.INTERVAL_HOUR),
-
-    /**
-     * The INTERVAL MINUTE data type.
-     */
-    INTERVAL_MINUTE("INTERVAL MINUTE", Value.INTERVAL_MINUTE),
-
-    /**
-     * The INTERVAL SECOND data type.
-     */
-    INTERVAL_SECOND("INTERVAL SECOND", Value.INTERVAL_SECOND),
-
-    /**
-     * The INTERVAL YEAR TO MONTH data type.
-     */
-    INTERVAL_YEAR_TO_MONTH("INTERVAL YEAR TO MONTH", Value.INTERVAL_YEAR_TO_MONTH),
-
-    /**
-     * The INTERVAL DAY TO HOUR data type.
-     */
-    INTERVAL_DAY_TO_HOUR("INTERVAL DAY TO HOUR", Value.INTERVAL_DAY_TO_HOUR),
-
-    /**
-     * The INTERVAL DAY TO MINUTE data type.
-     */
-    INTERVAL_DAY_TO_MINUTE("INTERVAL DAY TO MINUTE", Value.INTERVAL_DAY_TO_MINUTE),
-
-    /**
-     * The INTERVAL DAY TO SECOND data type.
-     */
-    INTERVAL_DAY_TO_SECOND("INTERVAL DAY TO SECOND", Value.INTERVAL_DAY_TO_SECOND),
-
-    /**
-     * The INTERVAL HOUR TO MINUTE data type.
-     */
-    INTERVAL_HOUR_TO_MINUTE("INTERVAL HOUR TO MINUTE", Value.INTERVAL_HOUR_TO_MINUTE),
-
-    /**
-     * The INTERVAL HOUR TO SECOND data type.
-     */
-    INTERVAL_HOUR_TO_SECOND("INTERVAL HOUR TO SECOND", Value.INTERVAL_HOUR_TO_SECOND),
-
-    /**
-     * The INTERVAL MINUTE TO SECOND data type.
-     */
-    INTERVAL_MINUTE_TO_SECOND("INTERVAL MINUTE TO SECOND", Value.INTERVAL_MINUTE_TO_SECOND),
+    public static final H2Type BLOB = new H2Type(TypeInfo.TYPE_BLOB, "BINARY LARGE OBJECT");
 
     // Boolean
 
     /**
      * The BOOLEAN data type
      */
-    BOOLEAN("BOOLEAN", Value.BOOLEAN),
+    public static final H2Type BOOLEAN = new H2Type(TypeInfo.TYPE_BOOLEAN, "BOOLEAN");
 
-    // Binary strings
-
-    /**
-     * The VARBINARY data type.
-     */
-    BINARY("BINARY", Value.BINARY),
+    // Exact numeric data types
 
     /**
-     * The VARBINARY data type.
+     * The TINYINT data type.
      */
-    VARBINARY("VARBINARY", Value.VARBINARY),
+    public static final H2Type TINYINT = new H2Type(TypeInfo.TYPE_TINYINT, "TINYINT");
 
     /**
-     * The BLOB data type.
+     * The SMALLINT data type.
      */
-    BLOB("BLOB", Value.BLOB),
-
-    // Collections
+    public static final H2Type SMALLINT = new H2Type(TypeInfo.TYPE_SMALLINT, "SMALLINT");
 
     /**
-     * The ARRAY data type.
+     * The INTEGER data type.
      */
-    ARRAY("ARRAY", Value.ARRAY),
-
-    // Row
+    public static final H2Type INTEGER = new H2Type(TypeInfo.TYPE_INTEGER, "INTEGER");
 
     /**
-     * The ROW data type.
+     * The BIGINT data type.
      */
-    ROW("ROW", Value.ROW),
-
-    // Result set for table functions
+    public static final H2Type BIGINT = new H2Type(TypeInfo.TYPE_BIGINT, "BIGINT");
 
     /**
-     * The RESULT_SET data type.
+     * The NUMERIC data type.
      */
-    RESULT_SET("RESULT_SET", Value.RESULT_SET),
+    public static final H2Type NUMERIC = new H2Type(TypeInfo.TYPE_NUMERIC, "NUMERIC");
+
+    // Approximate numeric data types
+
+    /**
+     * The REAL data type.
+     */
+    public static final H2Type REAL = new H2Type(TypeInfo.TYPE_REAL, "REAL");
+
+    /**
+     * The DOUBLE PRECISION data type.
+     */
+    public static final H2Type DOUBLE_PRECISION = new H2Type(TypeInfo.TYPE_DOUBLE, "DOUBLE PRECISION");
+
+    // Decimal floating-point type
+
+    /**
+     * The DECFLOAT data type.
+     */
+    public static final H2Type DECFLOAT = new H2Type(TypeInfo.TYPE_DECFLOAT, "DECFLOAT");
+
+    // Date-time data types
+
+    /**
+     * The DATE data type.
+     */
+    public static final H2Type DATE = new H2Type(TypeInfo.TYPE_DATE, "DATE");
+
+    /**
+     * The TIME data type.
+     */
+    public static final H2Type TIME = new H2Type(TypeInfo.TYPE_TIME, "TIME");
+
+    /**
+     * The TIME WITH TIME ZONE data type.
+     */
+    public static final H2Type TIME_WITH_TIME_ZONE = new H2Type(TypeInfo.TYPE_TIME_TZ, "TIME WITH TIME ZONE");
+
+    /**
+     * The TIMESTAMP data type.
+     */
+    public static final H2Type TIMESTAMP = new H2Type(TypeInfo.TYPE_TIMESTAMP, "TIMESTAMP");
+
+    /**
+     * The TIMESTAMP WITH TIME ZONE data type.
+     */
+    public static final H2Type TIMESTAMP_WITH_TIME_ZONE = new H2Type(TypeInfo.TYPE_TIMESTAMP_TZ,
+            "TIMESTAMP WITH TIME ZONE");
+
+    // Intervals
+
+    /**
+     * The INTERVAL YEAR data type.
+     */
+    public static final H2Type INTERVAL_YEAR = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_YEAR), "INTERVAL_YEAR");
+
+    /**
+     * The INTERVAL MONTH data type.
+     */
+    public static final H2Type INTERVAL_MONTH = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_MONTH),
+            "INTERVAL_MONTH");
+
+    /**
+     * The INTERVAL DAY data type.
+     */
+    public static final H2Type INTERVAL_DAY = new H2Type(TypeInfo.TYPE_INTERVAL_DAY, "INTERVAL_DAY");
+
+    /**
+     * The INTERVAL HOUR data type.
+     */
+    public static final H2Type INTERVAL_HOUR = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_HOUR), "INTERVAL_HOUR");
+
+    /**
+     * The INTERVAL MINUTE data type.
+     */
+    public static final H2Type INTERVAL_MINUTE = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_MINUTE),
+            "INTERVAL_MINUTE");
+
+    /**
+     * The INTERVAL SECOND data type.
+     */
+    public static final H2Type INTERVAL_SECOND = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_SECOND),
+            "INTERVAL_SECOND");
+
+    /**
+     * The INTERVAL YEAR TO MONTH data type.
+     */
+    public static final H2Type INTERVAL_YEAR_TO_MONTH = new H2Type(TypeInfo.TYPE_INTERVAL_YEAR_TO_MONTH,
+            "INTERVAL_YEAR_TO_MONTH");
+
+    /**
+     * The INTERVAL DAY TO HOUR data type.
+     */
+    public static final H2Type INTERVAL_DAY_TO_HOUR = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_DAY_TO_HOUR),
+            "INTERVAL_DAY_TO_HOUR");
+
+    /**
+     * The INTERVAL DAY TO MINUTE data type.
+     */
+    public static final H2Type INTERVAL_DAY_TO_MINUTE = new H2Type(TypeInfo.getTypeInfo(Value.INTERVAL_DAY_TO_MINUTE),
+            "INTERVAL_DAY_TO_MINUTE");
+
+    /**
+     * The INTERVAL DAY TO SECOND data type.
+     */
+    public static final H2Type INTERVAL_DAY_TO_SECOND = new H2Type(TypeInfo.TYPE_INTERVAL_DAY_TO_SECOND,
+            "INTERVAL_DAY_TO_SECOND");
+
+    /**
+     * The INTERVAL HOUR TO MINUTE data type.
+     */
+    public static final H2Type INTERVAL_HOUR_TO_MINUTE = new H2Type( //
+            TypeInfo.getTypeInfo(Value.INTERVAL_HOUR_TO_MINUTE), "INTERVAL_HOUR_TO_MINUTE");
+
+    /**
+     * The INTERVAL HOUR TO SECOND data type.
+     */
+    public static final H2Type INTERVAL_HOUR_TO_SECOND = new H2Type(TypeInfo.TYPE_INTERVAL_HOUR_TO_SECOND,
+            "INTERVAL_HOUR_TO_SECOND");
+
+    /**
+     * The INTERVAL MINUTE TO SECOND data type.
+     */
+    public static final H2Type INTERVAL_MINUTE_TO_SECOND = new H2Type(
+            TypeInfo.getTypeInfo(Value.INTERVAL_MINUTE_TO_SECOND), "INTERVAL_MINUTE_TO_SECOND");
 
     // Other JDBC
 
     /**
      * The JAVA_OBJECT data type.
      */
-    JAVA_OBJECT("JAVA_OBJECT", Value.JAVA_OBJECT),
+    public static final H2Type JAVA_OBJECT = new H2Type(TypeInfo.TYPE_JAVA_OBJECT, "JAVA_OBJECT");
 
     // Other non-standard
 
     /**
      * The ENUM data type.
      */
-    ENUM("ENUM", Value.ENUM),
+    public static final H2Type ENUM = new H2Type(TypeInfo.TYPE_ENUM_UNDEFINED, "ENUM");
 
     /**
      * The GEOMETRY data type.
      */
-    GEOMETRY("GEOMETRY", Value.GEOMETRY),
+    public static final H2Type GEOMETRY = new H2Type(TypeInfo.TYPE_GEOMETRY, "GEOMETRY");
 
     /**
      * The JSON data type.
      */
-    JSON("JSON", Value.JSON),
+    public static final H2Type JSON = new H2Type(TypeInfo.TYPE_JSON, "JSON");
 
     /**
      * The UUID data type.
      */
-    UUID("UUID", Value.UUID),
+    public static final H2Type UUID = new H2Type(TypeInfo.TYPE_UUID, "UUID");
 
-    ;
+    // Collections
 
-    private final String name;
+    // Use arrayOf() for ARRAY
 
-    private Integer valueType;
+    // Use row() for ROW
 
-    private H2Type(String name, int valueType) {
-        this.name = name;
-        this.valueType = valueType;
+    /**
+     * Returns ARRAY data type with the specified component type.
+     *
+     * @param componentType
+     *            the type of elements
+     * @return ARRAY data type
+     */
+    public static H2Type array(H2Type componentType) {
+        return new H2Type(TypeInfo.getTypeInfo(Value.ARRAY, -1L, -1, componentType.typeInfo),
+                "array(" + componentType.field + ')');
+    }
+
+    /**
+     * Returns ROW data type with specified types of fields and default names.
+     *
+     * @param fieldTypes
+     *            the type of fields
+     * @return ROW data type
+     */
+    public static H2Type row(H2Type... fieldTypes) {
+        int degree = fieldTypes.length;
+        TypeInfo[] row = new TypeInfo[degree];
+        StringBuilder builder = new StringBuilder("row(");
+        for (int i = 0; i < degree; i++) {
+            H2Type t = fieldTypes[i];
+            row[i] = t.typeInfo;
+            if (i > 0) {
+                builder.append(", ");
+            }
+            builder.append(t.field);
+        }
+        return new H2Type(TypeInfo.getTypeInfo(Value.ROW, -1L, -1, new ExtTypeInfoRow(row)),
+                builder.append(')').toString());
+    }
+
+    private TypeInfo typeInfo;
+
+    private String field;
+
+    private H2Type(TypeInfo typeInfo, String field) {
+        this.typeInfo = typeInfo;
+        this.field = "H2Type." + field;
     }
 
     @Override
     public String getName() {
-        return name;
+        return typeInfo.toString();
     }
 
     @Override
@@ -272,7 +310,12 @@ public enum H2Type implements SQLType {
      */
     @Override
     public Integer getVendorTypeNumber() {
-        return valueType;
+        return typeInfo.getValueType();
+    }
+
+    @Override
+    public String toString() {
+        return field;
     }
 
 }

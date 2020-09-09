@@ -7,8 +7,7 @@ package org.h2.command.query;
 
 import java.util.BitSet;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.table.Plan;
 import org.h2.table.PlanItem;
@@ -41,7 +40,7 @@ class Optimizer {
 
     private final TableFilter[] filters;
     private final Expression condition;
-    private final Session session;
+    private final SessionLocal session;
 
     private Plan bestPlan;
     private TableFilter topFilter;
@@ -49,7 +48,7 @@ class Optimizer {
     private Random random;
     private final AllColumnsForPlan allColumnsSet;
 
-    Optimizer(TableFilter[] filters, Expression condition, Session session) {
+    Optimizer(TableFilter[] filters, Expression condition, SessionLocal session) {
         this.filters = filters;
         this.condition = condition;
         this.session = session;
@@ -99,8 +98,10 @@ class Optimizer {
 
     private boolean canStop(int x) {
         return (x & 127) == 0
-                && cost >= 0  // don't calculate for simple queries (no rows or so)
-                && 10 * (System.nanoTime() - startNs) > cost * TimeUnit.MILLISECONDS.toNanos(1);
+                // don't calculate for simple queries (no rows or so)
+                && cost >= 0
+                // 100 microseconds * cost
+                && System.nanoTime() - startNs > cost * 100_000L;
     }
 
     private void calculateBruteForceAll() {

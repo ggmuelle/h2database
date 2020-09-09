@@ -8,12 +8,12 @@ package org.h2.command;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import org.h2.api.ErrorCode;
 import org.h2.engine.Constants;
 import org.h2.engine.Database;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.Mode.CharPadding;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.ParameterInterface;
 import org.h2.message.DbException;
 import org.h2.message.Trace;
@@ -21,6 +21,7 @@ import org.h2.result.ResultInterface;
 import org.h2.result.ResultWithGeneratedKeys;
 import org.h2.result.ResultWithPaddedStrings;
 import org.h2.util.MathUtils;
+import org.h2.util.Utils;
 
 /**
  * Represents a SQL statement. This object is only used on the server side.
@@ -29,7 +30,7 @@ public abstract class Command implements CommandInterface {
     /**
      * The session.
      */
-    protected final Session session;
+    protected final SessionLocal session;
 
     /**
      * The last start time.
@@ -50,7 +51,7 @@ public abstract class Command implements CommandInterface {
 
     private boolean canReuse;
 
-    Command(Session session, String sql) {
+    Command(SessionLocal session, String sql) {
         this.session = session;
         this.sql = sql;
         trace = session.getDatabase().getTrace(Trace.COMMAND);
@@ -128,7 +129,7 @@ public abstract class Command implements CommandInterface {
      */
     void start() {
         if (trace.isInfoEnabled() || session.getDatabase().getQueryStatistics()) {
-            startTimeNanos = System.nanoTime();
+            startTimeNanos = Utils.currentNanoTime();
         }
     }
 
@@ -155,8 +156,8 @@ public abstract class Command implements CommandInterface {
         } else if (session.getAutoCommit()) {
             session.commit(false);
         }
-        if (trace.isInfoEnabled() && startTimeNanos > 0) {
-            long timeMillis = (System.nanoTime() - startTimeNanos) / 1000 / 1000;
+        if (trace.isInfoEnabled() && startTimeNanos != 0L) {
+            long timeMillis = (System.nanoTime() - startTimeNanos) / 1_000_000L;
             if (timeMillis > Constants.SLOW_QUERY_LIMIT_MS) {
                 trace.info("slow query: {0} ms", timeMillis);
             }
@@ -173,8 +174,8 @@ public abstract class Command implements CommandInterface {
      */
     @Override
     public ResultInterface executeQuery(int maxrows, boolean scrollable) {
-        startTimeNanos = 0;
-        long start = 0;
+        startTimeNanos = 0L;
+        long start = 0L;
         Database database = session.getDatabase();
         Object sync = database.isMVStore() ? session : database;
         session.waitIfExclusiveModeEnabled();
@@ -188,7 +189,7 @@ public abstract class Command implements CommandInterface {
                     try {
                         ResultInterface result = query(maxrows);
                         callStop = !result.isLazy();
-                        if (database.getMode().padFixedLengthStrings) {
+                        if (database.getMode().charPadding == CharPadding.IN_RESULT_SETS) {
                             return ResultWithPaddedStrings.get(result);
                         }
                         return result;
@@ -239,7 +240,7 @@ public abstract class Command implements CommandInterface {
         boolean callStop = true;
         //noinspection SynchronizationOnLocalVariableOrMethodParameter
         synchronized (sync) {
-            Session.Savepoint rollback = session.setSavepoint();
+            SessionLocal.Savepoint rollback = session.setSavepoint();
             session.startStatementWithinTransaction(this);
             DbException ex = null;
             try {
@@ -305,8 +306,8 @@ public abstract class Command implements CommandInterface {
                 && errorCode != ErrorCode.ROW_NOT_FOUND_WHEN_DELETING_1) {
             throw e;
         }
-        long now = System.nanoTime();
-        if (start != 0 && TimeUnit.NANOSECONDS.toMillis(now - start) > session.getLockTimeout()) {
+        long now = Utils.currentNanoTime();
+        if (start != 0L && now - start > session.getLockTimeout() * 1_000_000L) {
             throw DbException.get(ErrorCode.LOCK_TIMEOUT_1, e);
         }
         // Only in PageStore mode we need to sleep here to avoid busy wait loop
@@ -321,13 +322,12 @@ public abstract class Command implements CommandInterface {
                 } catch (InterruptedException e1) {
                     // ignore
                 }
-                long slept = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - now);
-                if (slept >= sleep) {
+                if (System.nanoTime() - now >= sleep * 1_000_000L) {
                     break;
                 }
             }
         }
-        return start == 0 ? now : start;
+        return start == 0L ? now : start;
     }
 
     @Override
@@ -377,7 +377,9 @@ public abstract class Command implements CommandInterface {
     public abstract Set<DbObject> getDependencies();
 
     /**
-     * Is the command we just tried to execute a DefineCommand (i.e. DDL)
+     * Is the command we just tried to execute a DefineCommand (i.e. DDL).
+     *
+     * @return true if yes
      */
     protected abstract boolean isCurrentCommandADefineCommand();
 }

@@ -106,7 +106,7 @@ public class TestGeometryUtils extends TestBase {
      *            ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -389,7 +389,8 @@ public class TestGeometryUtils extends TestBase {
         EWKBUtils.parseEWKB(ewkb, target);
         int dimensionSystem = target.getDimensionSystem();
         assertEquals(dimensionSystem, vg.getDimensionSystem());
-        String formattedType = EWKTUtils.formatGeometryTypeAndDimensionSystem(vg.getTypeAndDimensionSystem());
+        String formattedType = EWKTUtils
+                .formatGeometryTypeAndDimensionSystem(new StringBuilder(), vg.getTypeAndDimensionSystem()).toString();
         assertTrue(EWKTUtils.ewkb2ewkt(ewkb).startsWith(formattedType));
         switch (dimensionSystem) {
         case DIMENSION_SYSTEM_XY:

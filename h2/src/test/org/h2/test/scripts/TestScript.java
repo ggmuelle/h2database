@@ -33,7 +33,6 @@ import org.h2.command.CommandContainer;
 import org.h2.command.CommandInterface;
 import org.h2.command.Prepared;
 import org.h2.command.query.Query;
-import org.h2.engine.SysProperties;
 import org.h2.engine.Mode.ModeEnum;
 import org.h2.jdbc.JdbcConnection;
 import org.h2.jdbc.JdbcPreparedStatement;
@@ -72,7 +71,7 @@ public class TestScript extends TestDb {
     private PrintStream out;
     private final ArrayList<String[]> result = new ArrayList<>();
     private final ArrayDeque<String> putBack = new ArrayDeque<>();
-    private StringBuilder errors;
+    private boolean foundErrors;
 
     private Random random = new Random(1);
 
@@ -94,7 +93,7 @@ public class TestScript extends TestDb {
      */
     public static void main(String... a) throws Exception {
         CHECK_ORDERING = true;
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     /**
@@ -131,8 +130,6 @@ public class TestScript extends TestDb {
         if (!config.memory && !config.big && !config.networked) {
             testScript("testSimple.sql");
         }
-        testScript("comments.sql");
-        testScript("compatibility.sql");
         testScript("dual.sql");
         testScript("indexes.sql");
         testScript("information_schema.sql");
@@ -140,22 +137,20 @@ public class TestScript extends TestDb {
         testScript("altertable-index-reuse.sql");
         testScript("altertable-fk.sql");
         testScript("default-and-on_update.sql");
-        String decimal2;
-        if (SysProperties.BIG_DECIMAL_IS_DECIMAL) {
-            decimal2 = "decimal_decimal";
-        } else {
-            decimal2 = "decimal_numeric";
-        }
 
+        for (String s : new String[] { "add_months", "compatibility" }) {
+            testScript("compatibility/" + s + ".sql");
+        }
         for (String s : new String[] { "array", "bigint", "binary", "blob",
-                "boolean", "char", "clob", "date", "decimal", decimal2, "double_precision", "enum",
-                "geometry", "identity", "int", "interval", "java_object", "json", "real", "row", "smallint",
+                "boolean", "char", "clob", "date", "decfloat", "double_precision", "enum",
+                "geometry", "identity", "int", "interval", "java_object", "json", "numeric", "real", "row", "smallint",
                 "time-with-time-zone", "time", "timestamp-with-time-zone", "timestamp", "tinyint",
                 "uuid", "varbinary", "varchar", "varchar-ignorecase" }) {
             testScript("datatypes/" + s + ".sql");
         }
-        for (String s : new String[] { "alterTableAdd", "alterTableAlterColumn", "alterTableDropColumn",
-                "alterTableRename", "analyze", "createAlias", "createDomain", "createSequence", "createSynonym",
+        for (String s : new String[] { "alterDomain", "alterTableAdd", "alterTableAlterColumn", "alterTableDropColumn",
+                "alterTableRename", "analyze", "commentOn", "createAlias", "createConstant", "createDomain",
+                "createSequence", "createSynonym",
                 "createTable", "createTrigger", "createView", "dropAllObjects", "dropDomain", "dropIndex",
                 "dropSchema", "dropTable", "grant", "truncateTable" }) {
             testScript("ddl/" + s + ".sql");
@@ -164,30 +159,31 @@ public class TestScript extends TestDb {
                 "merge", "mergeUsing", "replace", "script", "show", "update", "with" }) {
             testScript("dml/" + s + ".sql");
         }
-        for (String s : new String[] { "any", "array-agg", "avg", "bit-and", "bit-or", "count", "envelope",
-                "every", "histogram",
+        for (String s : new String[] { "any", "array_agg", "avg", "bit_and_agg", "bit_or_agg", "bit_xor_agg", "count",
+                "envelope", "every", "histogram",
                 "json_arrayagg", "json_objectagg",
                 "listagg", "max", "min", "mode", "percentile", "rank",
-                "stddev-pop", "stddev-samp", "sum", "var-pop", "var-samp" }) {
+                "stddev_pop", "stddev_samp", "sum", "var_pop", "var_samp" }) {
             testScript("functions/aggregate/" + s + ".sql");
         }
         for (String s : new String[] { "json_array", "json_object" }) {
             testScript("functions/json/" + s + ".sql");
         }
         for (String s : new String[] { "abs", "acos", "asin", "atan", "atan2",
-                "bitand", "bitget", "bitnot", "bitor", "bitxor", "ceil", "compress",
+                "bitand", "bitcount", "bitget", "bitnot", "bitor", "bitxor", "ceil", "compress",
                 "cos", "cosh", "cot", "decrypt", "degrees", "encrypt", "exp",
-                "expand", "floor", "hash", "length", "log", "mod", "ora-hash", "pi",
-                "power", "radians", "rand", "random-uuid", "round",
-                "roundmagic", "secure-rand", "sign", "sin", "sinh", "sqrt",
+                "expand", "floor", "hash", "length", "log", "lshift", "mod", "ora-hash", "pi",
+                "power", "radians", "rand", "random-uuid", "rotate", "round",
+                "roundmagic", "rshift", "secure-rand", "sign", "sin", "sinh", "sqrt",
                 "tan", "tanh", "truncate", "zero" }) {
             testScript("functions/numeric/" + s + ".sql");
         }
-        for (String s : new String[] { "ascii", "bit-length", "char", "concat",
-                "concat-ws", "difference", "hextoraw", "insert", "instr",
+        for (String s : new String[] { "array-to-string",
+                "ascii", "bit-length", "char", "concat",
+                "concat-ws", "difference", "hextoraw", "insert",
                 "left", "length", "locate", "lower", "lpad", "ltrim",
-                "octet-length", "position", "quote_ident", "rawtohex", "regexp-like",
-                "regex-replace", "repeat", "replace", "right", "rpad", "rtrim",
+                "octet-length", "quote_ident", "rawtohex", "regexp-like",
+                "regex-replace", "regexp-substr", "repeat", "replace", "right", "rpad", "rtrim",
                 "soundex", "space", "stringdecode", "stringencode",
                 "stringtoutf8", "substring", "to-char", "translate", "trim",
                 "upper", "utf8tostring", "xmlattr", "xmlcdata", "xmlcomment",
@@ -197,16 +193,16 @@ public class TestScript extends TestDb {
         for (String s : new String[] { "array-cat", "array-contains", "array-get",
                 "array-slice", "autocommit", "cancel-session", "casewhen",
                 "cardinality", "cast", "coalesce", "convert", "csvread", "csvwrite", "current_catalog",
-                "current_schema", "current_user", "currval",
-                "database-path", "decode", "disk-space-used",
+                "current_schema", "current_user", "currval", "data_type_sql",
+                "database-path", "db_object", "decode", "disk-space-used",
                 "file-read", "file-write", "greatest", "h2version", "identity",
                 "ifnull", "last-insert-id", "least", "link-schema", "lock-mode", "lock-timeout",
                 "memory-free", "memory-used", "nextval", "nullif", "nvl2",
                 "readonly", "rownum", "scope-identity", "session-id",
-                "table", "transaction-id", "truncate-value", "unnest" }) {
+                "table", "transaction-id", "trim_array", "truncate-value", "unnest" }) {
             testScript("functions/system/" + s + ".sql");
         }
-        for (String s : new String[] { "add_months", "current_date", "current_timestamp",
+        for (String s : new String[] { "current_date", "current_timestamp",
                 "current-time", "dateadd", "datediff", "dayname",
                 "day-of-month", "day-of-week", "day-of-year", "extract",
                 "formatdatetime", "hour", "minute", "month", "monthname",
@@ -216,11 +212,14 @@ public class TestScript extends TestDb {
         for (String s : new String[] { "lead", "nth_value", "ntile", "ratio_to_report", "row_number" }) {
             testScript("functions/window/" + s + ".sql");
         }
-        for (String s : new String[] { "at-time-zone", "boolean-test", "conditions", "data-change-delta-table", "help",
-                "sequence", "set" }) {
+        for (String s : new String[] { "at-time-zone", "boolean-test", "case", "concatenation", "conditions",
+                "data-change-delta-table", "field-reference", "help", "sequence", "set" }) {
             testScript("other/" + s + ".sql");
         }
-        for (String s : new String[] { "in", "like", "null", "type", "unique" }) {
+        for (String s : new String[] { "comments", "identifiers" }) {
+            testScript("parser/" + s + ".sql");
+        }
+        for (String s : new String[] { "between", "distinct", "in", "like", "null", "type", "unique" }) {
             testScript("predicates/" + s + ".sql");
         }
         for (String s : new String[] { "derived-column-names", "distinct", "joins", "query-optimisations", "select",
@@ -230,6 +229,9 @@ public class TestScript extends TestDb {
 
         deleteDb("script");
         System.out.flush();
+        if (foundErrors) {
+            throw new Exception("errors in script found");
+        }
     }
 
     private void testScript(String scriptFileName) throws Exception {
@@ -244,11 +246,7 @@ public class TestScript extends TestDb {
         out = null;
         result.clear();
         putBack.clear();
-        errors = null;
 
-        if (statements == null) {
-            println("Running commands in " + scriptFileName);
-        }
         String outFile;
         if (FIX_OUTPUT) {
             outFile = scriptFileName;
@@ -262,7 +260,6 @@ public class TestScript extends TestDb {
         conn = getConnection("script");
         stat = conn.createStatement();
         out = new PrintStream(new FileOutputStream(outFile));
-        errors = new StringBuilder();
         testFile(BASE_DIR + scriptFileName);
         conn.close();
         out.close();
@@ -287,9 +284,6 @@ public class TestScript extends TestDb {
             }
             file.renameTo(new File("h2/src/test/org/h2/test/scripts/" + scriptFileName));
             return;
-        }
-        if (errors.length() > 0) {
-            throw new Exception("errors in " + scriptFileName + " found");
         }
     }
 
@@ -766,12 +760,12 @@ public class TestScript extends TestDb {
     }
 
     private void addWriteResultError(String expected, String got) {
-        int idx = errors.length();
-        errors.append(fileName).append('\n');
-        errors.append("line: ").append(in.getLineNumber()).append('\n');
-        errors.append("exp: ").append(expected).append('\n');
-        errors.append("got: ").append(got).append('\n');
-        TestBase.logErrorMessage(errors.substring(idx));
+        foundErrors = true;
+        final String msg = fileName + '\n' + //
+                "line: " + in.getLineNumber() + '\n' + //
+                "exp: " + expected + '\n' + //
+                "got: " + got + '\n';
+        TestBase.logErrorMessage(msg);
     }
 
     private void write(String s) {

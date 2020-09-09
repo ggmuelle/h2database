@@ -10,7 +10,7 @@ import java.util.HashSet;
 
 import org.h2.api.ErrorCode;
 import org.h2.engine.Database;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionColumn;
 import org.h2.expression.ExpressionVisitor;
@@ -24,6 +24,7 @@ import org.h2.table.Column;
 import org.h2.table.ColumnResolver;
 import org.h2.table.Table;
 import org.h2.table.TableFilter;
+import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
@@ -65,10 +66,9 @@ public class SelectUnion extends Query {
      */
     final Query right;
 
-    private boolean isPrepared, checkInit;
     private boolean isForUpdate;
 
-    public SelectUnion(Session session, UnionType unionType, Query query, Query right) {
+    public SelectUnion(SessionLocal session, UnionType unionType, Query query, Query right) {
         super(session);
         this.unionType = unionType;
         this.left = query;
@@ -265,7 +265,7 @@ public class SelectUnion extends Query {
         for (int i = 0; i < len; i++) {
             Expression l = le.get(i);
             Expression r = re.get(i);
-            Column col = new Column(l.getAlias(session, i), Value.getHigherType(l.getType(), r.getType()));
+            Column col = new Column(l.getAlias(session, i), TypeInfo.getHigherType(l.getType(), r.getType()));
             Expression e = new ExpressionColumn(session.getDatabase(), col);
             expressions.add(e);
         }
@@ -365,7 +365,7 @@ public class SelectUnion extends Query {
     }
 
     @Override
-    public void updateAggregate(Session s, int stage) {
+    public void updateAggregate(SessionLocal s, int stage) {
         left.updateAggregate(s, stage);
         right.updateAggregate(s, stage);
     }

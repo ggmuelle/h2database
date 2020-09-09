@@ -6,7 +6,7 @@
 package org.h2.schema;
 
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.ValueExpression;
 import org.h2.message.DbException;
 import org.h2.message.Trace;
@@ -17,7 +17,7 @@ import org.h2.value.Value;
  * A user-defined constant as created by the SQL statement
  * CREATE CONSTANT
  */
-public class Constant extends SchemaObjectBase {
+public final class Constant extends SchemaObject {
 
     private Value value;
     private ValueExpression expression;
@@ -44,7 +44,7 @@ public class Constant extends SchemaObjectBase {
     }
 
     @Override
-    public void removeChildrenAndResources(Session session) {
+    public void removeChildrenAndResources(SessionLocal session) {
         database.removeMeta(session, getId());
         invalidate();
     }

@@ -11,7 +11,6 @@ import java.sql.Time;
 import java.util.concurrent.TimeUnit;
 
 import org.h2.pagestore.db.LobStorageBackend;
-import org.h2.result.SimpleResult;
 import org.h2.store.Data;
 import org.h2.store.DataHandler;
 import org.h2.store.FileStore;
@@ -31,7 +30,6 @@ import org.h2.value.ValueJavaObject;
 import org.h2.value.ValueNull;
 import org.h2.value.ValueNumeric;
 import org.h2.value.ValueReal;
-import org.h2.value.ValueResultSet;
 import org.h2.value.ValueSmallint;
 import org.h2.value.ValueTimestampTimeZone;
 import org.h2.value.ValueTinyint;
@@ -54,7 +52,7 @@ public class TestDataPage extends TestBase implements DataHandler {
      * @param a ignored
      */
     public static void main(String... a) throws Exception {
-        TestBase.createCaller().init().test();
+        TestBase.createCaller().init().testFromMain();
     }
 
     @Override
@@ -200,16 +198,8 @@ public class TestDataPage extends TestBase implements DataHandler {
                 testValue(ValueDouble.get(-(i / j)));
             }
         }
-        testValue(ValueArray.get(new Value[0]));
-        testValue(ValueArray.get(new Value[] { ValueInteger.get(-20), ValueInteger.get(10) }));
-
-        SimpleResult rs = new SimpleResult();
-        rs.addColumn("ID", "ID", Value.INTEGER, 0, 0);
-        rs.addColumn("NAME", "NAME", Value.VARCHAR, 255, 0);
-        rs.addRow(ValueInteger.get(1), ValueVarchar.get("Hello"));
-        rs.addRow(ValueInteger.get(2), ValueVarchar.get("World"));
-        rs.addRow(ValueInteger.get(3), ValueVarchar.get("Peace"));
-        testValue(ValueResultSet.get(rs));
+        testValue(ValueArray.get(new Value[0], null));
+        testValue(ValueArray.get(new Value[] { ValueInteger.get(-20), ValueInteger.get(10) }, null));
     }
 
     private void testValue(Value v) {

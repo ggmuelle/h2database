@@ -6,19 +6,18 @@
 package org.h2.expression;
 
 import org.h2.api.ErrorCode;
-import org.h2.command.Parser;
 import org.h2.constraint.DomainColumnResolver;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.table.ColumnResolver;
-import org.h2.table.TableFilter;
+import org.h2.util.ParserUtil;
 import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
  * An expression representing a value for domain constraint.
  */
-public class DomainValueExpression extends Expression {
+public final class DomainValueExpression extends Operation0 {
 
     private DomainColumnResolver columnResolver;
 
@@ -26,7 +25,7 @@ public class DomainValueExpression extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         return columnResolver.getValue(null);
     }
 
@@ -43,7 +42,7 @@ public class DomainValueExpression extends Expression {
     }
 
     @Override
-    public Expression optimize(Session session) {
+    public Expression optimize(SessionLocal session) {
         if (columnResolver == null) {
             throw DbException.get(ErrorCode.COLUMN_NOT_FOUND_1, "VALUE");
         }
@@ -56,24 +55,14 @@ public class DomainValueExpression extends Expression {
     }
 
     @Override
-    public void setEvaluatable(TableFilter tableFilter, boolean b) {
-        // nothing to do
-    }
-
-    @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
         if (columnResolver != null) {
             String name = columnResolver.getColumnName();
             if (name != null) {
-                return Parser.quoteIdentifier(builder, name, sqlFlags);
+                return ParserUtil.quoteIdentifier(builder, name, sqlFlags);
             }
         }
         return builder.append("VALUE");
-    }
-
-    @Override
-    public void updateAggregate(Session session, int stage) {
-        // nothing to do
     }
 
     @Override

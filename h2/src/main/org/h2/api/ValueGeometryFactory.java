@@ -117,4 +117,12 @@ public interface ValueGeometryFactory<T extends ValueGeometry<S>, S> {
      * @return the value
      */
     public T get(String s, int srid);
+    
+    /**
+     * 
+     * @param bytes
+     * @return
+     */
+    public ValueGeometry<?> getFromEWKB(byte[] bytes);
+
 } 

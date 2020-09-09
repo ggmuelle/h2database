@@ -13,7 +13,7 @@ import org.h2.command.dml.Insert;
 import org.h2.command.query.Query;
 import org.h2.engine.Database;
 import org.h2.engine.DbObject;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.message.DbException;
 import org.h2.schema.Schema;
@@ -37,7 +37,7 @@ public class CreateTable extends CommandWithColumns {
     private boolean sortedInsertMode;
     private boolean withNoData;
 
-    public CreateTable(Session session, Schema schema) {
+    public CreateTable(SessionLocal session, Schema schema) {
         super(session, schema);
         data.persistIndexes = true;
         data.persistData = true;
@@ -69,7 +69,7 @@ public class CreateTable extends CommandWithColumns {
     }
 
     @Override
-    public int update() {
+    public long update() {
         if (!transactional) {
             session.commit(true);
         }
@@ -124,7 +124,7 @@ public class CreateTable extends CommandWithColumns {
         }
         try {
             for (Column c : data.columns) {
-                c.prepareExpression(session);
+                c.prepareExpressions(session);
             }
             for (Sequence sequence : sequences) {
                 table.addSequence(sequence);
@@ -188,8 +188,7 @@ public class CreateTable extends CommandWithColumns {
         ArrayList<Expression> expressions = asQuery.getExpressions();
         for (int i = 0; i < columnCount; i++) {
             Expression expr = expressions.get(i);
-            Column col = new Column(expr.getColumnNameForView(session, i), expr.getType());
-            addColumn(col);
+            addColumn(new Column(expr.getColumnNameForView(session, i), expr.getType()));
         }
     }
 

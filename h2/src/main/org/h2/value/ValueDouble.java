@@ -17,9 +17,14 @@ import org.h2.message.DbException;
 public final class ValueDouble extends Value {
 
     /**
-     * The precision in digits.
+     * The precision in bits.
      */
-    public static final int PRECISION = 17;
+    static final int PRECISION = 53;
+
+    /**
+     * The approximate precision in decimal digits.
+     */
+    public static final int DECIMAL_PRECISION = 17;
 
     /**
      * The maximum display size of a DOUBLE.
@@ -128,17 +133,22 @@ public final class ValueDouble extends Value {
     }
 
     @Override
-    public double getDouble() {
-        return value;
-    }
-
-    @Override
     public BigDecimal getBigDecimal() {
         if (Math.abs(value) <= Double.MAX_VALUE) {
             return BigDecimal.valueOf(value);
         }
         // Infinite or NaN
         throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, Double.toString(value));
+    }
+
+    @Override
+    public float getFloat() {
+        return (float) value;
+    }
+
+    @Override
+    public double getDouble() {
+        return value;
     }
 
     @Override
@@ -154,11 +164,6 @@ public final class ValueDouble extends Value {
          */
         long hash = Double.doubleToRawLongBits(value);
         return (int) (hash ^ (hash >>> 32));
-    }
-
-    @Override
-    public Object getObject() {
-        return value;
     }
 
     /**

@@ -129,10 +129,7 @@ public final class ValueUuid extends Value {
 
     @Override
     public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
-        if ((sqlFlags & NO_CASTS) == 0) {
-            return addString(builder.append("CAST('")).append("' AS UUID)");
-        }
-        return addString(builder.append('\'')).append('\'');
+        return addString(builder.append("UUID '")).append('\'');
     }
 
     @Override
@@ -155,6 +152,11 @@ public final class ValueUuid extends Value {
         return addString(new StringBuilder(36)).toString();
     }
 
+    @Override
+    public byte[] getBytes() {
+        return Bits.uuidToBytes(high, low);
+    }
+
     private StringBuilder addString(StringBuilder builder) {
         StringUtils.appendHex(builder, high >> 32, 4).append('-');
         StringUtils.appendHex(builder, high >> 16, 2).append('-');
@@ -169,21 +171,8 @@ public final class ValueUuid extends Value {
             return 0;
         }
         ValueUuid v = (ValueUuid) o;
-        long v1 = high, v2 = v.high;
-        if (v1 == v2) {
-            v1 = low;
-            v2 = v.low;
-            if (mode.isUuidUnsigned()) {
-                v1 += Long.MIN_VALUE;
-                v2 += Long.MIN_VALUE;
-            }
-            return Long.compare(v1, v2);
-        }
-        if (mode.isUuidUnsigned()) {
-            v1 += Long.MIN_VALUE;
-            v2 += Long.MIN_VALUE;
-        }
-        return v1 > v2 ? 1 : -1;
+        int cmp = Long.compareUnsigned(high, v.high);
+        return cmp != 0 ? cmp : Long.compareUnsigned(low, v.low);
     }
 
     @Override
@@ -195,14 +184,13 @@ public final class ValueUuid extends Value {
         return high == v.high && low == v.low;
     }
 
-    @Override
-    public Object getObject() {
+    /**
+     * Returns the UUID.
+     *
+     * @return the UUID
+     */
+    public UUID getUuid() {
         return new UUID(high, low);
-    }
-
-    @Override
-    public byte[] getBytes() {
-        return Bits.uuidToBytes(high, low);
     }
 
     /**
@@ -221,6 +209,16 @@ public final class ValueUuid extends Value {
      */
     public long getLow() {
         return low;
+    }
+
+    @Override
+    public long charLength() {
+        return DISPLAY_SIZE;
+    }
+
+    @Override
+    public long octetLength() {
+        return PRECISION;
     }
 
 }

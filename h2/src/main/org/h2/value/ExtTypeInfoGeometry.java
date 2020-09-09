@@ -18,21 +18,20 @@ public final class ExtTypeInfoGeometry extends ExtTypeInfo {
 
     private final Integer srid;
 
-    static String toSQL(int type, Integer srid) {
+    static StringBuilder toSQL(StringBuilder builder, int type, Integer srid) {
         if (type == 0 && srid == null) {
-            return "";
+            return builder;
         }
-        StringBuilder builder = new StringBuilder();
         builder.append('(');
         if (type == 0) {
             builder.append("GEOMETRY");
         } else {
-            builder.append(EWKTUtils.formatGeometryTypeAndDimensionSystem(type));
+            EWKTUtils.formatGeometryTypeAndDimensionSystem(builder, type);
         }
         if (srid != null) {
             builder.append(", ").append((int) srid);
         }
-        return builder.append(')').toString();
+        return builder.append(')');
     }
 
     /**
@@ -67,8 +66,8 @@ public final class ExtTypeInfoGeometry extends ExtTypeInfo {
     }
 
     @Override
-    public String getCreateSQL() {
-        return toSQL(type, srid);
+    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+        return toSQL(builder, type, srid);
     }
 
     /**

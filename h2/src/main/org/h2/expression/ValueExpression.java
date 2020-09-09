@@ -5,23 +5,20 @@
  */
 package org.h2.expression;
 
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.condition.Comparison;
 import org.h2.index.IndexCondition;
 import org.h2.message.DbException;
-import org.h2.table.ColumnResolver;
 import org.h2.table.TableFilter;
 import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 import org.h2.value.ValueBoolean;
-import org.h2.value.ValueCollectionBase;
 import org.h2.value.ValueNull;
-import org.h2.value.ValueResultSet;
 
 /**
  * An expression representing a constant value.
  */
-public class ValueExpression extends Expression {
+public class ValueExpression extends Operation0 {
 
     /**
      * The expression represents ValueNull.INSTANCE.
@@ -94,7 +91,7 @@ public class ValueExpression extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         return value;
     }
 
@@ -104,25 +101,18 @@ public class ValueExpression extends Expression {
     }
 
     @Override
-    public void createIndexConditions(Session session, TableFilter filter) {
+    public void createIndexConditions(SessionLocal session, TableFilter filter) {
         if (value.getValueType() == Value.BOOLEAN && !value.getBoolean()) {
             filter.addIndexCondition(IndexCondition.get(Comparison.FALSE, null, this));
         }
     }
 
     @Override
-    public Expression getNotIfPossible(Session session) {
-        return new Comparison(Comparison.EQUAL, this, ValueExpression.FALSE);
-    }
-
-    @Override
-    public void mapColumns(ColumnResolver resolver, int level, int state) {
-        // nothing to do
-    }
-
-    @Override
-    public Expression optimize(Session session) {
-        return this;
+    public Expression getNotIfPossible(SessionLocal session) {
+        if (value == ValueNull.INSTANCE) {
+            return TypedValueExpression.UNKNOWN;
+        }
+        return getBoolean(!value.getBoolean());
     }
 
     @Override
@@ -141,23 +131,13 @@ public class ValueExpression extends Expression {
     }
 
     @Override
-    public void setEvaluatable(TableFilter tableFilter, boolean b) {
-        // nothing to do
-    }
-
-    @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
         if (this == DEFAULT) {
             builder.append("DEFAULT");
         } else {
             value.getSQL(builder, sqlFlags);
         }
         return builder;
-    }
-
-    @Override
-    public void updateAggregate(Session session, int stage) {
-        // nothing to do
     }
 
     @Override
@@ -185,16 +165,4 @@ public class ValueExpression extends Expression {
         return 0;
     }
 
-    @Override
-    public Expression[] getExpressionColumns(Session session) {
-        int valueType = getType().getValueType();
-        switch (valueType) {
-        case Value.ARRAY:
-        case Value.ROW:
-            return getExpressionColumns(session, (ValueCollectionBase) getValue(session));
-        case Value.RESULT_SET:
-            return getExpressionColumns(session, ((ValueResultSet) getValue(session)).getResult());
-        }
-        return super.getExpressionColumns(session);
-    }
 }

@@ -17,9 +17,14 @@ import org.h2.message.DbException;
 public final class ValueReal extends Value {
 
     /**
-     * The precision in digits.
+     * The precision in bits.
      */
-    static final int PRECISION = 7;
+    static final int PRECISION = 24;
+
+    /**
+     * The approximate precision in decimal digits.
+     */
+    static final int DECIMAL_PRECISION = 7;
 
     /**
      * The maximum display size of a REAL.
@@ -133,16 +138,6 @@ public final class ValueReal extends Value {
     }
 
     @Override
-    public float getFloat() {
-        return value;
-    }
-
-    @Override
-    public double getDouble() {
-        return value;
-    }
-
-    @Override
     public BigDecimal getBigDecimal() {
         if (Math.abs(value) <= Float.MAX_VALUE) {
             // better rounding behavior than BigDecimal.valueOf(f)
@@ -150,6 +145,16 @@ public final class ValueReal extends Value {
         }
         // Infinite or NaN
         throw DbException.get(ErrorCode.DATA_CONVERSION_ERROR_1, Float.toString(value));
+    }
+
+    @Override
+    public float getFloat() {
+        return value;
+    }
+
+    @Override
+    public double getDouble() {
+        return value;
     }
 
     @Override
@@ -164,11 +169,6 @@ public final class ValueReal extends Value {
          * floatToRawIntBits() instead of floatToIntBits() here.
          */
         return Float.floatToRawIntBits(value);
-    }
-
-    @Override
-    public Object getObject() {
-        return value;
     }
 
     /**

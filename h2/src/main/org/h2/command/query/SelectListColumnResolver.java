@@ -8,11 +8,12 @@ package org.h2.command.query;
 import java.util.ArrayList;
 
 import org.h2.engine.Database;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.expression.Expression;
 import org.h2.expression.ExpressionColumn;
 import org.h2.table.Column;
 import org.h2.table.ColumnResolver;
+import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
@@ -37,12 +38,10 @@ public class SelectListColumnResolver implements ColumnResolver {
         columns = new Column[columnCount];
         expressions = new Expression[columnCount];
         ArrayList<Expression> columnList = select.getExpressions();
-        Session session = select.getSession();
+        SessionLocal session = select.getSession();
         for (int i = 0; i < columnCount; i++) {
             Expression expr = columnList.get(i);
-            Column column = new Column(expr.getAlias(session, i), Value.NULL);
-            column.setTable(null, i);
-            columns[i] = column;
+            columns[i] = new Column(expr.getAlias(session, i), TypeInfo.TYPE_NULL, null, i);
             expressions[i] = expr.getNonAliasExpression();
         }
     }

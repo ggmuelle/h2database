@@ -6,18 +6,16 @@
 package org.h2.expression;
 
 import org.h2.command.Prepared;
-import org.h2.engine.Session;
+import org.h2.engine.SessionLocal;
 import org.h2.message.DbException;
 import org.h2.schema.Sequence;
-import org.h2.table.ColumnResolver;
-import org.h2.table.TableFilter;
 import org.h2.value.TypeInfo;
 import org.h2.value.Value;
 
 /**
  * Wraps a sequence when used in a statement.
  */
-public class SequenceValue extends Expression {
+public final class SequenceValue extends Operation0 {
 
     private final Sequence sequence;
 
@@ -52,39 +50,19 @@ public class SequenceValue extends Expression {
     }
 
     @Override
-    public Value getValue(Session session) {
+    public Value getValue(SessionLocal session) {
         return current ? session.getCurrentValueFor(sequence) : session.getNextValueFor(sequence, prepared);
     }
 
     @Override
     public TypeInfo getType() {
-        return sequence.getDatabase().getMode().decimalSequences ? TypeInfo.TYPE_NUMERIC_BIGINT : TypeInfo.TYPE_BIGINT;
+        return sequence.getDataType();
     }
 
     @Override
-    public void mapColumns(ColumnResolver resolver, int level, int state) {
-        // nothing to do
-    }
-
-    @Override
-    public Expression optimize(Session session) {
-        return this;
-    }
-
-    @Override
-    public void setEvaluatable(TableFilter tableFilter, boolean b) {
-        // nothing to do
-    }
-
-    @Override
-    public StringBuilder getSQL(StringBuilder builder, int sqlFlags) {
+    public StringBuilder getUnenclosedSQL(StringBuilder builder, int sqlFlags) {
         builder.append(current ? "CURRENT" : "NEXT").append(" VALUE FOR ");
         return sequence.getSQL(builder, sqlFlags);
-    }
-
-    @Override
-    public void updateAggregate(Session session, int stage) {
-        // nothing to do
     }
 
     @Override
