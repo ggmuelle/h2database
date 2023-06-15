@@ -5,8 +5,6 @@
  */
 package org.h2.value;
 
-import static org.h2.value.ValueToObjectConverter.GEOMETRY_CLASS;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.Reader;
@@ -105,7 +103,7 @@ public final class ValueToObjectConverter2 extends TraceObject {
             return TypeInfo.TYPE_BLOB;
         } else if (BigDecimal.class.isAssignableFrom(clazz)) {
             return TypeInfo.TYPE_NUMERIC_FLOATING_POINT;
-        } else if (GEOMETRY_CLASS != null && GEOMETRY_CLASS.isAssignableFrom(clazz)) {
+        } else if (ValueGeometry.getGeometryClass() != null &&  ValueGeometry.getGeometryClass().isAssignableFrom(clazz)) {
             return TypeInfo.TYPE_GEOMETRY;
         } else if (Array.class.isAssignableFrom(clazz)) {
             return TypeInfo.TYPE_ARRAY_UNKNOWN;

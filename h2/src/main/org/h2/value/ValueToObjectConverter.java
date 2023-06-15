@@ -53,24 +53,6 @@ import org.h2.util.LegacyDateTimeUtils;
 public final class ValueToObjectConverter extends TraceObject {
 
     /**
-     * The Geometry class. This object is null if the JTS jar file is not in the
-     * classpath.
-     */
-    public static final Class<?> GEOMETRY_CLASS;
-
-    private static final String GEOMETRY_CLASS_NAME = "org.locationtech.jts.geom.Geometry";
-
-    static {
-        Class<?> g;
-        try {
-            g = JdbcUtils.loadUserClass(GEOMETRY_CLASS_NAME);
-        } catch (Exception e) {
-            g = null;
-        }
-        GEOMETRY_CLASS = g;
-    }
-
-    /**
      * Convert a Java object to a value.
      *
      * @param session
@@ -140,7 +122,7 @@ public final class ValueToObjectConverter extends TraceObject {
         }
         if (x instanceof Object[]) {
             return arrayToValue(session, x);
-        } else if (GEOMETRY_CLASS != null && GEOMETRY_CLASS.isAssignableFrom(clazz)) {
+        } else if (ValueGeometry.getGeometryClass() != null && ValueGeometry.getGeometryClass().isAssignableFrom(clazz)) {
             return ValueGeometry.getFromGeometry(x);
         } else if (x instanceof BigInteger) {
             return ValueNumeric.get((BigInteger) x);
@@ -333,7 +315,7 @@ public final class ValueToObjectConverter extends TraceObject {
             return (T) JSR310Utils.valueToDuration(value);
         } else if (type.isArray()) {
             return (T) valueToArray(type, value, conn);
-        } else if (GEOMETRY_CLASS != null && GEOMETRY_CLASS.isAssignableFrom(type)) {
+        } else if (ValueGeometry.getGeometryClass() != null && ValueGeometry.getGeometryClass().isAssignableFrom(type)) {
             return (T) value.convertToGeometry(null).getGeometry();
         } else {
             return (T) valueToOther(type, value, conn);
@@ -463,7 +445,7 @@ public final class ValueToObjectConverter extends TraceObject {
         case Value.JAVA_OBJECT:
             return forJdbc ? Object.class : byte[].class;
         case Value.GEOMETRY: {
-            Class<?> clazz = GEOMETRY_CLASS;
+            Class<?> clazz = ValueGeometry.getGeometryClass();
             return clazz != null ? clazz : String.class;
         }
         case Value.UUID:
@@ -564,7 +546,7 @@ public final class ValueToObjectConverter extends TraceObject {
             return forJdbc ? JdbcUtils.deserialize(value.getBytesNoCopy(), conn.getJavaObjectSerializer())
                     : value.getBytes();
         case Value.GEOMETRY:
-            return GEOMETRY_CLASS != null ? ((ValueGeometry) value).getGeometry() : value.getString();
+            return ValueGeometry.getGeometryClass() != null ? ((ValueGeometry<?>) value).getGeometry() : value.getString();
         case Value.UUID:
             return ((ValueUuid) value).getUuid();
         case Value.ARRAY:

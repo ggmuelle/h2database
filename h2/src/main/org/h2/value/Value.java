@@ -724,7 +724,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL, Typ
      * @param v the value to look for
      * @return the value in the cache or the value passed
      */
-    static Value cache(Value v) {
+    public static Value cache(Value v) {
         if (SysProperties.OBJECT_CACHE) {
             int hash = v.hashCode();
             Value[] cache;
@@ -2307,11 +2307,11 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL, Typ
      *            the extended data type information, or null
      * @return the GEOMETRY value
      */
-    public final ValueGeometry convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
-        ValueGeometry result;
+    public final ValueGeometry<?> convertToGeometry(ExtTypeInfoGeometry extTypeInfo) {
+        ValueGeometry<?> result;
         switch (getValueType()) {
         case GEOMETRY:
-            result = (ValueGeometry) this;
+            result = (ValueGeometry<?>) this;
             break;
         case BINARY:
         case VARBINARY:
@@ -2404,7 +2404,7 @@ public abstract class Value extends VersionedValue<Value> implements HasSQL, Typ
             v = ValueJson.get(((ValueTimestampTimeZone) this).getISOString());
             break;
         case GEOMETRY: {
-            ValueGeometry vg = (ValueGeometry) this;
+            ValueGeometry<?> vg = (ValueGeometry<?>) this;
             v = ValueJson.getInternal(GeoJsonUtils.ewkbToGeoJson(vg.getBytesNoCopy(), vg.getDimensionSystem()));
             break;
         }
